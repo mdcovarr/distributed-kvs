@@ -23,4 +23,4 @@ def echo(msg):
         return 'This method is unsupported.', 405
 
 if __name__ == '__main__':
-    app.run(host='localhost', port=8088)
+    app.run(host='0.0.0.0', port=8081)
