@@ -9,6 +9,8 @@ UPDATED_MESSAGE = 'Updated successfully'
 RETRIEVED_MESSAGE = 'Retrieved successfully'
 KEY_ERROR = 'Key does not exist'
 GET_ERROR_MESSAGE = 'Error in GET'
+DELETE_SUCCESS_MESSAGE = 'Deleted successfully'
+DELETE_ERROR_MESSAGE = 'Deleted successfully'
 
 MISSING_RESPONSE = {
     "error": "Value is missing",
@@ -103,5 +105,22 @@ def kvs(key):
             code = 404
 
         return jsonify(response), code
+
+    if request.method == 'DELETE':
+        if key in kv_store:
+            # Need to delete key value from store
+            del kv_store[key]
+
+            response['doesExist'] = True
+            response['message'] = DELETE_SUCCESS_MESSAGE
+            code = 200
+        else:
+            response['doesExist'] = False
+            response['error'] = KEY_ERROR
+            response['message'] = DELETE_ERROR_MESSAGE
+            code = 404
+
+        return jsonify(response), code
+
 if __name__ == '__main__':
     app.run(host='localhost', port=13800)
