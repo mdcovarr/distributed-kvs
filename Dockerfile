@@ -7,4 +7,4 @@ WORKDIR /distributed_kvs
 RUN pip3 install -r requirements.txt
 EXPOSE 8081
 
-CMD ["python", "__main__.py"]
+CMD ["python", "app.py"]
