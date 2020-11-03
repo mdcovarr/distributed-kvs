@@ -6,6 +6,10 @@ kv_store = {}
 KEY_LENGTH = 50
 ADDED_MESSAGE = 'Added successfully'
 UPDATED_MESSAGE = 'Updated successfully'
+RETRIEVED_MESSAGE = 'Retrieved successfully'
+KEY_ERROR = 'Key does not exist'
+GET_ERROR_MESSAGE = 'Error in GET'
+
 MISSING_RESPONSE = {
     "error": "Value is missing",
     "message": "Error in PUT"
@@ -49,9 +53,10 @@ def echo(msg):
 
 @app.route('/kvs/<string:key>', methods=['GET', 'PUT', 'DELETE'])
 def kvs(key):
+    response = {}
+    code = None
+
     if request.method == 'PUT':
-        response = {}
-        code = None
 
         try:
             content = request.get_json()
@@ -85,7 +90,18 @@ def kvs(key):
 
         return jsonify(response), 201
 
-    return 'good'
+    if request.method == 'GET':
+        if key in kv_store:
+            response['doesExist'] = True
+            response['message'] = RETRIEVED_MESSAGE
+            response['value'] = kv_store[key]
+            code = 200
+        else:
+            response['doesExist'] = False
+            response['error'] = KEY_ERROR
+            response['message'] = GET_ERROR_MESSAGE
+            code = 404
 
+        return jsonify(response), code
 if __name__ == '__main__':
     app.run(host='localhost', port=13800)
