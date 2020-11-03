@@ -77,20 +77,20 @@ def kvs(key):
 
         # at this point we have a valid value and key
         if key in kv_store:
-            replace = True
+            replaced = True
             message = UPDATED_MESSAGE
             code = 200
         else:
-            replace = False
+            replaced = False
             message = ADDED_MESSAGE
             code = 201
 
-        response['replace'] = replace
+        response['replaced'] = replaced
         response['message'] = message
 
         kv_store[key] = value
 
-        return jsonify(response), 201
+        return jsonify(response), code
 
     if request.method == 'GET':
         if key in kv_store:
