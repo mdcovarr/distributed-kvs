@@ -1,6 +1,7 @@
 from flask import Flask
 from flask import request
 from flask import jsonify
+import os
 
 kv_store = {}
 KEY_LENGTH = 50
@@ -10,7 +11,7 @@ RETRIEVED_MESSAGE = 'Retrieved successfully'
 KEY_ERROR = 'Key does not exist'
 GET_ERROR_MESSAGE = 'Error in GET'
 DELETE_SUCCESS_MESSAGE = 'Deleted successfully'
-DELETE_ERROR_MESSAGE = 'Deleted successfully'
+DELETE_ERROR_MESSAGE = 'Error in DELETE'
 
 MISSING_RESPONSE = {
     "error": "Value is missing",
@@ -31,6 +32,12 @@ LONG_KEY_RESPONSE = {
     "error": "Key is too long",
     "message": "Error in PUT"
 }
+
+FORWARDING_ADDRESS = os.environ.get('FORWARDING_ADDRESS')
+if FORWARDING_ADDRESS and FORWARDING_ADDRESS != '':
+    FOLLOWER = True
+else:
+    FOLLOWER = False
 
 app = Flask(__name__)
 
@@ -59,7 +66,6 @@ def kvs(key):
     code = None
 
     if request.method == 'PUT':
-
         try:
             content = request.get_json()
         except:
@@ -123,4 +129,4 @@ def kvs(key):
         return jsonify(response), code
 
 if __name__ == '__main__':
-    app.run(host='localhost', port=13800)
+    app.run(host='127.0.0.1', port=13800)
