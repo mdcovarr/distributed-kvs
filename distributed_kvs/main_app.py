@@ -1,3 +1,10 @@
+"""
+    Flask Blueprint for the 'main' node.
+
+    This file defines api route handler GET, POST and DELETE requests
+    to the key value store
+"""
+
 from flask import Blueprint
 from flask import Flask
 from flask import request
@@ -5,24 +12,44 @@ from flask import jsonify
 import myconstants
 import os
 
-kv_store = {}
+kv_store = {} # key value store 
 
 main_blueprint = Blueprint('main_blueprint', __name__)
 
 @main_blueprint.route('/', methods=['GET', 'POST'])
 def index():
+    """
+    Method to handle the root path /
+    :return: hello world string
+    """
     return 'Hello, world!'
 
 @main_blueprint.route('/hello', methods=['GET'])
 def hello():
+    """
+    Method to handle the path http://0.0.0.0/hello
+    :return: hello world string
+    """
     return 'Hello, world!'
 
 @main_blueprint.route('/hello/<string:name>', methods=['POST'])
 def hello_name(name):
+    """
+    Method to handle the path http://0.0.0.0/hello/STRING where STRING
+    can be any string sequence
+    :param name: is the string value after path /hello/
+    :return: string with 'Hello, ' prepended to name value.
+    """
     return 'Hello, {0}!'.format(name)
 
 @main_blueprint.route('/echo/<string:msg>', methods=['GET', 'POST'])
 def echo(msg):
+    """
+    Method to handle GET and POST requests to http://0.0.0.0/echo/STRING
+    where STRING is any string sequence
+    :param msg: msg = STRING in url request
+    :return: string message and HTTP status code
+    """
     if request.method =='POST':
         return 'POST message received: {0}'.format(msg)
     if request.method == 'GET':
