@@ -12,7 +12,7 @@ from flask import jsonify
 import myconstants
 import os
 
-kv_store = {} # key value store 
+kv_store = {} # key value store
 
 main_blueprint = Blueprint('main_blueprint', __name__)
 
@@ -57,9 +57,18 @@ def echo(msg):
 
 @main_blueprint.route('/kvs/<string:key>', methods=['GET', 'PUT', 'DELETE'])
 def kvs(key):
+    """
+    Method to hanldle GET, PUT and DELETE requests to the key-value store e.g.
+    http://0.0.0.0/kvs/STRING where STRING is the key parameter
+    :param key: the key parameter of interest NOTE: request.get_json() gets content of request
+    :return: json response and status code
+    """
     response = {}
     code = None
 
+    """
+        PUT request handling
+    """
     if request.method == 'PUT':
         try:
             content = request.get_json()
@@ -93,6 +102,9 @@ def kvs(key):
 
         return jsonify(response), code
 
+    """
+        GET requests handling
+    """
     if request.method == 'GET':
         if key in kv_store:
             response['doesExist'] = True
@@ -107,6 +119,9 @@ def kvs(key):
 
         return jsonify(response), code
 
+    """
+        DELETE request handling
+    """
     if request.method == 'DELETE':
         if key in kv_store:
             # Need to delete key value from store
