@@ -1,3 +1,5 @@
+PORT = 13800
+IP_ADDRESS = '0.0.0.0'
 KEY_LENGTH = 50
 ADDED_MESSAGE = 'Added successfully'
 UPDATED_MESSAGE = 'Updated successfully'
