@@ -16,7 +16,7 @@ class ShardNodeWrapper(object):
         self.app = Flask(__name__)                  # The Flask Server (Node)
         self.kv_store = {}                          # The local key-value store
         self.view = []                              # The view, IP and PORT address of other nodes
-        self.address = os.environ.get('ADDRESS')    # IP and PORT address of the current node
+        self.address = '' #os.environ.get('ADDRESS')    # IP and PORT address of the current node
 
     def setup_routes(self):
         """
@@ -38,7 +38,7 @@ class ShardNodeWrapper(object):
         Method to setup the view of the current node
         :return None:
         """
-        view_string = os.environ.get('VIEW')
+        view_string = '' #os.environ.get('VIEW')
         self.view = view_string.split(',')
 
     def run(self):
@@ -46,7 +46,7 @@ class ShardNodeWrapper(object):
         Method to start flask server
         :return None:
         """
-        self.app.run(host='0.0.0.0', port=13800)
+        self.app.run(host='127.0.0.1', port=13800)
 
     def key_count(self):
         """
@@ -54,7 +54,15 @@ class ShardNodeWrapper(object):
         distributed key-value store
         :return count: the total count of keys in the store
         """
-        return 'Hello, world!'
+        response = {}
+        count = len(self.kv_store)
+
+        response['message'] = 'Key count retrieved successfully'
+        response['key-count'] = count
+        code = 200
+
+        return jsonify(response), code
+
 
     def view_change(self):
         """
