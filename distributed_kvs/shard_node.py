@@ -6,9 +6,6 @@ from flask import Flask, request, jsonify
 import myconstants
 import os
 
-# Node's Key-Value store
-kv_store = {}
-
 app = Flask(__name__)
 class ShardNodeWrapper(object):
     """
@@ -16,10 +13,10 @@ class ShardNodeWrapper(object):
         needed variables e.g., key-value store
     """
     def __init__(self):
-        self.app = Flask(__name__)
-        self.kv_store = {}
-        self.views = {}
-        self.address = ''
+        self.app = Flask(__name__)                  # The Flask Server (Node)
+        self.kv_store = {}                          # The local key-value store
+        self.view = []                              # The view, IP and PORT address of other nodes
+        self.address = os.environ.get('ADDRESS')    # IP and PORT address of the current node
 
     def setup_routes(self):
         """
@@ -36,12 +33,20 @@ class ShardNodeWrapper(object):
         self.app.add_url_rule(
                 rule='/kvs/keys/<string:key>', endpoint='keys', view_func=self.keys, methods=['GET', 'PUT', 'DELETE'])
 
+    def setup_view(self):
+        """
+        Method to setup the view of the current node
+        :return None:
+        """
+        view_string = os.environ.get('VIEW')
+        self.view = view_string.split(',')
+
     def run(self):
         """
         Method to start flask server
         :return None:
         """
-        self.app.run(host='127.0.0.1', port=13800)
+        self.app.run(host='0.0.0.0', port=13800)
 
     def key_count(self):
         """
