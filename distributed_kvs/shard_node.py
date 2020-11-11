@@ -70,7 +70,18 @@ class ShardNodeWrapper(object):
         in the distributed key-value store
         :return status: the status of the HTTP PUT request
         """
-        return 'Hello, world!'
+        response = {}
+        contents = request.get_json()
+
+        # need to update view
+        # need to tell other nodes to update their view
+        # perform repartitioning of the keys
+
+        response['message'] = 'View change successful'
+        response['shards'] = []
+        code = 200
+
+        return jsonify(response), code
 
     def keys(self, key):
         """
@@ -79,4 +90,3 @@ class ShardNodeWrapper(object):
         :param key: the key of interest
         :return status: the response of the given HTTP request
         """
-        return 'Hello, world!'
