@@ -3,11 +3,13 @@ Implementation of a key-value store for Distributed Systems course
 CSE 138 at University of California, Santa Cruz (UCSC)
 
 ## Information
-**Name:** Michael Covarrubias
 
-**CruzID:** mdcovarr
-
-**Email:** mdcovarr@ucsc.edu
+### Developers
+|                               |                               |                               |
+| ----------------------------- | ----------------------------- | ----------------------------- |
+|**Name:** Michael Covarrubias  |**Name:** Rashmi Chennagiri    |**Name:** Nazib Sorathiya      |
+|**CruzID:** mdcovarr           |**CruzID:**                    |**CruzID:**                    |
+|**Email:** mdcovarr@ucsc.edu   |**Email:**                     |**Email:**                     |
 
 # Grab Repository
 1. Open terminal
