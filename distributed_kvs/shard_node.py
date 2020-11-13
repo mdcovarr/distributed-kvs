@@ -140,8 +140,6 @@ class ShardNodeWrapper(object):
 
         """
             GET requests handling
-            Node does not need to ask other nodes since it's
-            not the main node queried by client
         """
         if request.method == 'GET':
             if key in self.kv_store:
@@ -161,7 +159,38 @@ class ShardNodeWrapper(object):
             PUT requests handling
         """
         if request.method == 'PUT':
-            print('handing PUT')
+            try:
+                content = request.get_json()
+            except:
+                # Error: Invalid Json format
+                return jsonify(myconstants.BAD_FORMAT_RESPONSE), 400
+
+            try:
+                value = content['value']
+            except:
+                # Error: Key value did not exist
+                return jsonify(myconstants.MISSING_RESPONSE), 400
+
+            if len(key) > myconstants.KEY_LENGTH:
+                return jsonify(myconstants.LONG_KEY_RESPONSE), 400
+
+            # at this point we have a valid value and key
+            if key in self.kv_store:
+                replaced = True
+                message = myconstants.UPDATED_MESSAGE
+                code = 200
+            else:
+                replaced = False
+                message = myconstants.ADDED_MESSAGE
+                response['address'] = self.address
+                code = 201
+
+            response['replaced'] = replaced
+            response['message'] = message
+
+            self.kv_store[key] = value
+
+            return jsonify(response), code
 
         """
             DELETE requests handling
