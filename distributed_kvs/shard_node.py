@@ -3,6 +3,8 @@
 """
 
 from flask import Flask, request, jsonify
+import json
+import requests
 import myconstants
 import os
 
@@ -14,9 +16,9 @@ class ShardNodeWrapper(object):
     """
     def __init__(self):
         self.app = Flask(__name__)                  # The Flask Server (Node)
-        self.kv_store = {'sampleKey': 'sampleValue'}                          # The local key-value store
+        self.kv_store = {}                          # The local key-value store
         self.view = []                              # The view, IP and PORT address of other nodes
-        self.address = '' #os.environ.get('ADDRESS')    # IP and PORT address of the current node
+        self.address = '127.0.0.1:13800' #os.environ.get('ADDRESS')    # IP and PORT address of the current node
 
     def setup_routes(self):
         """
@@ -45,7 +47,7 @@ class ShardNodeWrapper(object):
         Method to setup the view of the current node
         :return None:
         """
-        view_string = '' #os.environ.get('VIEW')
+        view_string = '127.0.0.1:13801' #os.environ.get('VIEW')
         self.view = view_string.split(',')
 
     def run(self):
@@ -53,7 +55,7 @@ class ShardNodeWrapper(object):
         Method to start flask server
         :return None:
         """
-        self.app.run(host='127.0.0.1', port=13800)
+        self.app.run(host='127.0.0.1', port=13801)
 
     def key_count(self):
         """
@@ -109,14 +111,36 @@ class ShardNodeWrapper(object):
                 response['value'] = self.kv_store[key]
                 code = 200
             else:
-                # Need to ask all other nodes
+                """
+                    Need to ask other nodes if they have the key
+                """
+                proxy_path = 'proxy/kvs/keys'
+
+                for node_address in self.view:
+                    url = os.path.join('http://', node_address, proxy_path, key)
+
+                    try:
+                        resp = requests.get(url, timeout=myconstants.TIMEOUT)
+                        resp_dict = json.loads(resp.text)
+
+                        if resp_dict['doesExist'] == True:
+                            """
+                                We found the key on another Shard Node
+                                now forward response back to client
+                            """
+                            return resp.text, resp.status_code
+
+                    except Exception as e:
+                        # Shard Node we are forwarding to was down
+                        # TODO: Add better exception handling
+                        continue
+
                 response['doesExist'] = False
                 response['error'] = myconstants.KEY_ERROR
                 response['message'] = myconstants.GET_ERROR_MESSAGE
                 code = 404
 
-        return jsonify(response), code
-
+            return jsonify(response), code
 
 
         """
@@ -139,7 +163,7 @@ class ShardNodeWrapper(object):
         response = {}
 
         """
-            GET requests handling
+            GET requests handling forward from another shard node
         """
         if request.method == 'GET':
             if key in self.kv_store:
@@ -156,7 +180,7 @@ class ShardNodeWrapper(object):
             return jsonify(response), code
 
         """
-            PUT requests handling
+            PUT requests handling forward from another shard node
         """
         if request.method == 'PUT':
             try:
@@ -193,7 +217,7 @@ class ShardNodeWrapper(object):
             return jsonify(response), code
 
         """
-            DELETE requests handling
+            DELETE requests handling forward from another shard node
         """
         if request.method == 'DELETE':
             if key in self.kv_store:
