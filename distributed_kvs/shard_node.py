@@ -14,7 +14,7 @@ class ShardNodeWrapper(object):
     """
     def __init__(self):
         self.app = Flask(__name__)                  # The Flask Server (Node)
-        self.kv_store = {}                          # The local key-value store
+        self.kv_store = {'sampleKey': 'sampleValue'}                          # The local key-value store
         self.view = []                              # The view, IP and PORT address of other nodes
         self.address = '' #os.environ.get('ADDRESS')    # IP and PORT address of the current node
 
@@ -32,6 +32,13 @@ class ShardNodeWrapper(object):
                 rule='/kvs/view-change', endpoint='view_change', view_func=self.view_change, methods=['PUT'])
         self.app.add_url_rule(
                 rule='/kvs/keys/<string:key>', endpoint='keys', view_func=self.keys, methods=['GET', 'PUT', 'DELETE'])
+
+        """
+            Proxy Routes
+            /proxy/kvs/keys/<key>
+        """
+        self.app.add_url_rule(
+                rule='/proxy/kvs/<string:key>', endpoint='proxy_keys', view_func=self.proxy_keys, methods=['GET', 'PUT', 'DELETE'])
 
     def setup_view(self):
         """
@@ -90,3 +97,60 @@ class ShardNodeWrapper(object):
         :param key: the key of interest
         :return status: the response of the given HTTP request
         """
+        response = {}
+
+        """
+            GET requests handling
+        """
+        if request.method == 'GET':
+            if key in self.kv_store:
+                response['doesExist'] = True
+                response['message'] = myconstants.RETRIEVED_MESSAGE
+                response['value'] = self.kv_store[key]
+                code = 200
+            else:
+                # Need to ask all other nodes
+                response['doesExist'] = False
+                response['error'] = myconstants.KEY_ERROR
+                response['message'] = myconstants.GET_ERROR_MESSAGE
+                code = 404
+
+        return jsonify(response), code
+
+
+
+        """
+            PUT requests handling
+        """
+        if request.method == 'PUT':
+            print('handing PUT')
+
+        """
+            DELETE requests handling
+        """
+        if request.method == 'DELETE':
+            print('handing DELETE')
+
+    def proxy_keys(self, key):
+        """
+        Method similar to keys, but instead it does not ask other nodes about a key.
+        proxy_keys just returns whether it finds its key in it's local storage or not
+        """
+
+        """
+            GET requests handling
+        """
+        if request.method == 'GET':
+            print('handing GET')
+
+        """
+            PUT requests handling
+        """
+        if request.method == 'PUT':
+            print('handing PUT')
+
+        """
+            DELETE requests handling
+        """
+        if request.method == 'DELETE':
+            print('handing DELETE')
