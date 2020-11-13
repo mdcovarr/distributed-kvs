@@ -147,7 +147,15 @@ class ShardNodeWrapper(object):
             PUT requests handling
         """
         if request.method == 'PUT':
-            print('handing PUT')
+            """
+                1. Need to determine if PUT request is an 'update' or 'insert'
+
+                An 'update' is determined if current shard node or any other shard node
+                has the existing key
+
+                A 'insert' is determined if no shard node has the current key.
+                Also will want to insert key to node with least amount of keys
+            """
 
         """
             DELETE requests handling
