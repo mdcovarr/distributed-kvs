@@ -153,7 +153,46 @@ class ShardNodeWrapper(object):
             DELETE requests handling
         """
         if request.method == 'DELETE':
-            print('handing DELETE')
+            if key in self.kv_store:
+                # Need to delete key value from store
+                del self.kv_store[key]
+
+                response['doesExist'] = True
+                response['message'] = myconstants.DELETE_SUCCESS_MESSAGE
+                response['address'] = self.address
+                code = 200
+            else:
+                """
+                    Need to ask other nodes if they have the key
+                """
+                proxy_path = 'proxy/kvs/keys'
+
+                for node_address in self.view:
+                    url = os.path.join('http://', node_address, proxy_path, key)
+
+                    try:
+                        resp = requests.delete(url, timeout=myconstants.TIMEOUT)
+                        resp_dict = json.loads(resp.text)
+
+                        if resp_dict['doesExist'] == True:
+                            """
+                                We found the key on another Shard Node
+                                now forward response back to client
+                            """
+                            return resp.text, resp.status_code
+
+                    except Exception as e:
+                        # Shard Node we are forwarding to was down
+                        # TODO: Add better exception handling
+                        continue
+
+                response['doesExist'] = False
+                response['error'] = myconstants.KEY_ERROR
+                response['message'] = myconstants.DELETE_ERROR_MESSAGE
+                code = 404
+
+            return jsonify(response), code
+
 
     def proxy_keys(self, key):
         """
