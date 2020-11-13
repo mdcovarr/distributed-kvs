@@ -167,4 +167,18 @@ class ShardNodeWrapper(object):
             DELETE requests handling
         """
         if request.method == 'DELETE':
-            print('handing DELETE')
+            if key in self.kv_store:
+                # Need to delete key value from store
+                del self.kv_store[key]
+
+                response['doesExist'] = True
+                response['message'] = myconstants.DELETE_SUCCESS_MESSAGE
+                response['address'] = self.address
+                code = 200
+            else:
+                response['doesExist'] = False
+                response['error'] = myconstants.KEY_ERROR
+                response['message'] = myconstants.DELETE_ERROR_MESSAGE
+                code = 404
+
+            return jsonify(response), code
