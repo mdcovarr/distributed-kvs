@@ -38,7 +38,7 @@ class ShardNodeWrapper(object):
             /proxy/kvs/keys/<key>
         """
         self.app.add_url_rule(
-                rule='/proxy/kvs/<string:key>', endpoint='proxy_keys', view_func=self.proxy_keys, methods=['GET', 'PUT', 'DELETE'])
+                rule='/proxy/kvs/keys/<string:key>', endpoint='proxy_keys', view_func=self.proxy_keys, methods=['GET', 'PUT', 'DELETE'])
 
     def setup_view(self):
         """
@@ -136,12 +136,26 @@ class ShardNodeWrapper(object):
         Method similar to keys, but instead it does not ask other nodes about a key.
         proxy_keys just returns whether it finds its key in it's local storage or not
         """
+        response = {}
 
         """
             GET requests handling
+            Node does not need to ask other nodes since it's
+            not the main node queried by client
         """
         if request.method == 'GET':
-            print('handing GET')
+            if key in self.kv_store:
+                response['doesExist'] = True
+                response['message'] = myconstants.RETRIEVED_MESSAGE
+                response['value'] = self.kv_store[key]
+                code = 200
+            else:
+                response['doesExist'] = False
+                response['error'] = myconstants.KEY_ERROR
+                response['message'] = myconstants.GET_ERROR_MESSAGE
+                code = 404
+
+            return jsonify(response), code
 
         """
             PUT requests handling
