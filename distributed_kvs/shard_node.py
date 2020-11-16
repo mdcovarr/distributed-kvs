@@ -14,11 +14,13 @@ class ShardNodeWrapper(object):
         Class object to wrapp around Flask server and
         needed variables e.g., key-value store
     """
-    def __init__(self):
+    def __init__(self, ip, port):
         self.app = Flask(__name__)                  # The Flask Server (Node)
         self.kv_store = {}                          # The local key-value store
         self.view = []                              # The view, IP and PORT address of other nodes
         self.address = '127.0.0.1:13800' #os.environ.get('ADDRESS')    # IP and PORT address of the current node
+        self.ip = ip
+        self.port = port
 
     def setup_routes(self):
         """
@@ -55,7 +57,7 @@ class ShardNodeWrapper(object):
         Method to start flask server
         :return None:
         """
-        self.app.run(host='127.0.0.1', port=13801)
+        self.app.run(host=self.ip, port=self.port)
 
     def key_count(self):
         """
@@ -82,6 +84,7 @@ class ShardNodeWrapper(object):
         response = {}
         contents = request.get_json()
 
+        # TODO: 
         # need to update view
         # need to tell other nodes to update their view
         # perform repartitioning of the keys
@@ -156,6 +159,12 @@ class ShardNodeWrapper(object):
                 A 'insert' is determined if no shard node has the current key.
                 Also will want to insert key to node with least amount of keys
             """
+            try:
+                content = request.get_json()
+            except:
+                # Error: Invalid Json format
+                return jsonify(myconstants.BAD_FORMAT_RESPONSE), 400
+
 
         """
             DELETE requests handling
