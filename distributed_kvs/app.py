@@ -20,10 +20,10 @@ def handle_args():
     parser = argparse.ArgumentParser(description='Server Accepting and Sending Encrypt/Decrypt Request')
 
     parser.add_argument('-i', '--ip', dest='ip', default='0.0.0.0',
-                        help='IP Address to use for client to connect to, or server to listen on')
+        help='IP Address to use for client to connect to, or server to listen on. Value defaults to 0.0.0.0 if no argument provided')
 
     parser.add_argument('-p', '--port', dest='port', type=int, default=13800,
-                        help='Port for server to listen on')
+        help='Port for server to listen on. value defaults to 13800 if no argument provided')
 
     return parser.parse_args()
 
