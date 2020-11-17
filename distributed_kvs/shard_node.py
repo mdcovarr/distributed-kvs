@@ -151,7 +151,6 @@ class ShardNodeWrapper(object):
 
             return jsonify(response), code
 
-
         """
             PUT requests handling
         """
@@ -165,12 +164,67 @@ class ShardNodeWrapper(object):
                 A 'insert' is determined if no shard node has the current key.
                 Also will want to insert key to node with least amount of keys
             """
+
             try:
                 content = request.get_json()
             except:
                 # Error: Invalid Json format
                 return jsonify(myconstants.BAD_FORMAT_RESPONSE), 400
 
+            try:
+                value = content['value']
+            except:
+                # Error: Key value did not exist
+                return jsonify(myconstants.MISSING_RESPONSE), 400
+
+            if len(key) > myconstants.KEY_LENGTH:
+                return jsonify(myconstants.LONG_KEY_RESPONSE), 400
+
+
+            if key in self.kv_store:
+                self.kv_store[key] = content['value']
+                message = myconstants.UPDATED_MESSAGE
+                code = 200
+
+                response['replaced'] = True
+                response['message'] = message
+            else:
+
+                proxy_path = 'proxy/kvs/keys'
+
+                for node_address in self.view:
+                    url = os.path.join('http://', node_address, proxy_path, key)
+
+                    try:
+                        resp = requests.get(url, timeout=myconstants.TIMEOUT)
+                        resp_dict = json.loads(resp.text)
+
+                        if resp_dict['doesExist'] == True:
+                            """
+                                We found the key on another Shard Node
+                                now forward response back to client
+                            """
+                            resp = requests.put(url, timeout=myconstants.TIMEOUT)
+                            # resp_dict = json.loads(resp.text)
+
+                            return resp.text, resp.status_code
+
+                    except (requests.Timeout, requests.exceptions.ConnectionError):
+                        # Shard Node we are forwarding to was down
+                        error = 'Main instance is down'
+                        message = 'Error in PUT'
+                        status_code = 503
+                        res_dict = {'error': error, 'message': message}
+
+                        return jsonify(res_dict), status_code
+
+                # Not present in any of the other nodes
+                self.kv_store[key] = content['value']
+                response['replaced'] = False
+                response['message'] = myconstants.ADDED_MESSAGE
+                code = 201
+
+            return jsonify(response), code
 
         """
             DELETE requests handling
@@ -252,28 +306,16 @@ class ShardNodeWrapper(object):
             PUT requests handling forward from another shard node
         """
         if request.method == 'PUT':
-            # try:
-            #     content = request.get_json()
-            # except:
-            #     # Error: Invalid Json format
-            #     return jsonify(myconstants.BAD_FORMAT_RESPONSE), 400
-            #
-            # try:
-            #     value = content['value']
-            # except:
-            #     # Error: Key value did not exist
-            #     return jsonify(myconstants.MISSING_RESPONSE), 400
-            #
-            # if len(key) > myconstants.KEY_LENGTH:
-            #     return jsonify(myconstants.LONG_KEY_RESPONSE), 400
 
-            # at this point we have a valid value and key
+            # We will have a valid value and key as the validation is done in the main node
+
             # if key in self.kv_store:
+
             content = request.get_json()
             self.kv_store[key] = content['value']
-            replaced = True
             message = myconstants.UPDATED_MESSAGE
             code = 200
+
             # else:
             #     replaced = False
             #     message = myconstants.ADDED_MESSAGE
