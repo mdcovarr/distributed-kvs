@@ -19,9 +19,10 @@ def handle_args():
     """
     parser = argparse.ArgumentParser(description='Server Accepting and Sending Encrypt/Decrypt Request')
 
-    parser.add_argument('IP', help='IP Address to use for client to connect to, or server to listen on')
+    parser.add_argument('-i', '--ip', dest='ip', default='0.0.0.0',
+                        help='IP Address to use for client to connect to, or server to listen on')
 
-    parser.add_argument('PORT', type=int,
+    parser.add_argument('-p', '--port', dest='port', type=int, default=13800,
                         help='Port for server to listen on')
 
     return parser.parse_args()
@@ -31,7 +32,7 @@ if __name__ == '__main__':
         Code main entrance
     """
     args = handle_args()
-    app = ShardNodeWrapper(args.IP, args.PORT)
+    app = ShardNodeWrapper(args.ip, args.port)
     app.setup_routes()
     app.setup_view()
     app.run()
