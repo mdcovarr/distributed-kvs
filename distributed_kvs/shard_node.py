@@ -18,9 +18,9 @@ class ShardNodeWrapper(object):
         self.app = Flask(__name__)                  # The Flask Server (Node)
         self.kv_store = {}                          # The local key-value store
         self.view = []                              # The view, IP and PORT address of other nodes
-        self.address = '127.0.0.1:13800' #os.environ.get('ADDRESS')    # IP and PORT address of the current node
         self.ip = ip
         self.port = port
+        self.address = str(self.ip) + ':' + str(self.port)    # IP and PORT address of the current node
 
     def setup_routes(self):
         """
@@ -238,6 +238,7 @@ class ShardNodeWrapper(object):
                 response['doesExist'] = True
                 response['message'] = myconstants.RETRIEVED_MESSAGE
                 response['value'] = self.kv_store[key]
+                response['address'] = self.address
                 code = 200
             else:
                 response['doesExist'] = False
