@@ -17,7 +17,7 @@ def handle_args():
     """
     Function used to handle command line arguments
     """
-    parser = argparse.ArgumentParser(description='Server Accepting and Sending Encrypt/Decrypt Request')
+    parser = argparse.ArgumentParser(description='Application implementing a distributed Key-Value Store')
 
     parser.add_argument('-i', '--ip', dest='ip', default='0.0.0.0',
         help='IP Address to use for client to connect to, or server to listen on. Value defaults to 0.0.0.0 if no argument provided')

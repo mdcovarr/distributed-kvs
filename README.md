@@ -49,11 +49,32 @@ pip install -r requirements.txt
 │   ├── app.py
 │   ├── main_app.py
 │   ├── myconstants.py
-│   └── proxy_app.py
+│   ├── proxy_app.py
+│   └── shard_node.py
 ├── requirements.txt
+├── test_assignment3.sh
 └── tests
-    └── test_assignment2.py
+    ├── test_assignment2.py
+    ├── test_assignment3.py
+    └── test_assignment3_test2.py
 
+2 directories, 13 files
+```
+
+### Help on running application
+Run command `python distributed_kvs/app.py -h` to get help on running application
+
+Output will look similar to:
+```
+(venv) michael@MacBook-Pro distributed-kvs % python distributed_kvs/app.py -h
+usage: app.py [-h] [-i IP] [-p PORT]
+
+Application implementing a distributed Key-Value Store
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -i IP, --ip IP        IP Address to use for client to connect to, or server to listen on. Value defaults to 0.0.0.0 if no argument provided
+  -p PORT, --port PORT  Port for server to listen on. value defaults to 13800 if no argument provided
 ```
 
 # Run Software
