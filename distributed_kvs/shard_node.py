@@ -133,10 +133,16 @@ class ShardNodeWrapper(object):
                             """
                             return resp.text, resp.status_code
 
-                    except Exception as e:
+                    except (requests.Timeout, requests.exceptions.ConnectionError):
                         # Shard Node we are forwarding to was down
-                        # TODO: Add better exception handling
-                        continue
+
+                        error = 'Main instance is down'
+                        message = 'Error in PUT'
+                        status_code = 503
+                        res_dict = {'error': error, 'message': message}
+
+                        return jsonify(res_dict), status_code
+
 
                 response['doesExist'] = False
                 response['error'] = myconstants.KEY_ERROR
@@ -198,10 +204,16 @@ class ShardNodeWrapper(object):
                             """
                             return resp.text, resp.status_code
 
-                    except Exception as e:
+
+                    except (requests.Timeout, requests.exceptions.ConnectionError):
                         # Shard Node we are forwarding to was down
-                        # TODO: Add better exception handling
-                        continue
+
+                        error = 'Main instance is down'
+                        message = 'Error in PUT'
+                        status_code = 503
+                        res_dict = {'error': error, 'message': message}
+
+                        return jsonify(res_dict), status_code
 
                 response['doesExist'] = False
                 response['error'] = myconstants.KEY_ERROR
