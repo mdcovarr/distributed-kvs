@@ -34,5 +34,6 @@ if __name__ == '__main__':
     args = handle_args()
     app = ShardNodeWrapper(args.ip, args.port)
     app.setup_routes()
+    app.setup_address()
     app.setup_view()
     app.run()

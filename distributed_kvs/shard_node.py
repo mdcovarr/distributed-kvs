@@ -8,7 +8,6 @@ import requests
 import myconstants
 import os
 
-app = Flask(__name__)
 class ShardNodeWrapper(object):
     """
         Class object to wrapp around Flask server and
@@ -20,7 +19,7 @@ class ShardNodeWrapper(object):
         self.view = []                              # The view, IP and PORT address of other nodes
         self.ip = ip
         self.port = port
-        self.address = str(self.ip) + ':' + str(self.port)    # IP and PORT address of the current node
+        self.address = ''
 
     def setup_routes(self):
         """
@@ -49,8 +48,29 @@ class ShardNodeWrapper(object):
         Method to setup the view of the current node
         :return None:
         """
-        view_string = '127.0.0.1:13801' #os.environ.get('VIEW')
-        self.view = view_string.split(',')
+        view_string = os.environ.get('VIEW')
+
+        try:
+            # This is for deployment environment
+            self.view = view_string.split(',')
+            self.view.remove(self.address)
+        except AttributeError:
+            # this is for development environment
+            self.view = []
+
+    def setup_address(self):
+        """
+        Method used to setup the address of the shard node. If os.environ.get('ADDRESS')
+        is an empty string '', that means we are in development. If ADDRESS is NOT empty,
+        that means we are in deployment docker
+        :return None: No return from function
+        """
+        address = os.environ.get('ADDRESS')
+
+        if address == '':
+            self.address = str(self.ip) + ':' + str(self.port)
+        else:
+            self.address = address
 
     def run(self):
         """
@@ -84,7 +104,7 @@ class ShardNodeWrapper(object):
         response = {}
         contents = request.get_json()
 
-        # TODO: 
+        # TODO:
         # need to update view
         # need to tell other nodes to update their view
         # perform repartitioning of the keys
@@ -205,7 +225,6 @@ class ShardNodeWrapper(object):
                                 now forward response back to client
                             """
                             resp = requests.put(url, timeout=myconstants.TIMEOUT)
-                            # resp_dict = json.loads(resp.text)
 
                             return resp.text, resp.status_code
 
@@ -308,19 +327,10 @@ class ShardNodeWrapper(object):
         if request.method == 'PUT':
 
             # We will have a valid value and key as the validation is done in the main node
-
-            # if key in self.kv_store:
-
             content = request.get_json()
             self.kv_store[key] = content['value']
             message = myconstants.UPDATED_MESSAGE
             code = 200
-
-            # else:
-            #     replaced = False
-            #     message = myconstants.ADDED_MESSAGE
-            #     response['address'] = self.address
-            #     code = 201
 
             response['replaced'] = True
             response['message'] = message
