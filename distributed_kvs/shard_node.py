@@ -252,36 +252,37 @@ class ShardNodeWrapper(object):
             PUT requests handling forward from another shard node
         """
         if request.method == 'PUT':
-            try:
-                content = request.get_json()
-            except:
-                # Error: Invalid Json format
-                return jsonify(myconstants.BAD_FORMAT_RESPONSE), 400
-
-            try:
-                value = content['value']
-            except:
-                # Error: Key value did not exist
-                return jsonify(myconstants.MISSING_RESPONSE), 400
-
-            if len(key) > myconstants.KEY_LENGTH:
-                return jsonify(myconstants.LONG_KEY_RESPONSE), 400
+            # try:
+            #     content = request.get_json()
+            # except:
+            #     # Error: Invalid Json format
+            #     return jsonify(myconstants.BAD_FORMAT_RESPONSE), 400
+            #
+            # try:
+            #     value = content['value']
+            # except:
+            #     # Error: Key value did not exist
+            #     return jsonify(myconstants.MISSING_RESPONSE), 400
+            #
+            # if len(key) > myconstants.KEY_LENGTH:
+            #     return jsonify(myconstants.LONG_KEY_RESPONSE), 400
 
             # at this point we have a valid value and key
-            if key in self.kv_store:
-                replaced = True
-                message = myconstants.UPDATED_MESSAGE
-                code = 200
-            else:
-                replaced = False
-                message = myconstants.ADDED_MESSAGE
-                response['address'] = self.address
-                code = 201
+            # if key in self.kv_store:
+            content = request.get_json()
+            self.kv_store[key] = content['value']
+            replaced = True
+            message = myconstants.UPDATED_MESSAGE
+            code = 200
+            # else:
+            #     replaced = False
+            #     message = myconstants.ADDED_MESSAGE
+            #     response['address'] = self.address
+            #     code = 201
 
-            response['replaced'] = replaced
+            response['replaced'] = True
             response['message'] = message
-
-            self.kv_store[key] = value
+            response['address'] = self.address
 
             return jsonify(response), code
 
