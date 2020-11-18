@@ -47,6 +47,9 @@ class ShardNodeWrapper(object):
                 rule='/proxy/kvs/keys/<string:key>', endpoint='proxy_keys', view_func=self.proxy_keys, methods=['GET', 'PUT', 'DELETE'])
         self.app.add_url_rule(
                 rule='/proxy/kvs/view-change', endpoint='proxy_view_change', view_func=self.proxy_view_change, methods=['PUT'])
+        # receive dictionary from other nodes
+        self.app.add_url_rule(
+                rule='/proxy/receive-dict', endpoint='proxy_receive_dict', view_func=self.proxy_receive_dict, methods=['PUT'])
 
     def setup_view(self):
         """
@@ -169,8 +172,35 @@ class ShardNodeWrapper(object):
         """
             Now need to send other nodes their new key values
         """
+        for node_address in new_dict:
+            url = os.path.join('http://', node_address, 'proxy/receive-dict')
+            payload = new_dict[node_address]
+
+            try:
+                resp = requests.put(url, json=json.dumps(payload), timeout=myconstants.TIMEOUT)
+            except:
+                print('TODO: better error handling sending dictionary to another shard node')
 
         return jsonify(new_dict), code
+
+    def proxy_receive_dict(self):
+        """
+        Function used to handle the receiving of a json kv store
+        from another shard node
+        """
+        # only accepts PUT requests
+        response = {}
+        response['message'] = myconstants.UPDATED_MESSAGE
+        code = 200
+
+        try:
+            contents = request.get_json()
+        except:
+            print('Error: Invalid Json')
+
+        print(contents)
+
+        return jsonify(response), code
 
 
     def keys(self, key):
