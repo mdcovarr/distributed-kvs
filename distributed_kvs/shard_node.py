@@ -3,6 +3,7 @@
 """
 
 from flask import Flask, request, jsonify
+from uhashring import HashRing
 import json
 import requests
 import myconstants
@@ -42,6 +43,10 @@ class ShardNodeWrapper(object):
         """
         self.app.add_url_rule(
                 rule='/proxy/kvs/keys/<string:key>', endpoint='proxy_keys', view_func=self.proxy_keys, methods=['GET', 'PUT', 'DELETE'])
+        self.app.add_url_rule(
+                rule='/proxy/kvs/keys/<string:key>', endpoint='proxy_keys', view_func=self.proxy_keys, methods=['GET', 'PUT', 'DELETE'])
+        self.app.add_url_rule(
+                rule='/proxy/kvs/view-change', endpoint='proxy_view_change', view_func=self.proxy_view_change, methods=['PUT'])
 
     def setup_view(self):
         """
@@ -114,6 +119,39 @@ class ShardNodeWrapper(object):
         code = 200
 
         return jsonify(response), code
+
+    def proxy_view_change(self):
+        """
+        Method to handle receiving a proxy view change. If a node
+        receives a proxy view change, it means that another node was the
+        node who received the initial /view-change from the client
+        """
+        response = {}
+        response['message'] = 'View change successful'
+        code = 200
+
+        # Only accepting PUT requests
+        try:
+            contents = request.get_json()
+        except:
+            print('Error: Invalid json')
+
+        try:
+            new_view = contents['view']
+        except:
+            print('Error: unable to get new view key value from json')
+
+        # at this point we need to perform hashing
+        # create id to shard_node dictionary
+        view_list = list(new_view.split(','))
+
+        hr = HashRing(nodes=view_list)
+
+        for key in self.kv_store:
+            print(hr.get_node(key))
+
+        return jsonify(response), code
+
 
     def keys(self, key):
         """
