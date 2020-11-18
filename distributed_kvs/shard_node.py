@@ -174,6 +174,7 @@ class ShardNodeWrapper(object):
                 new_kv_store = new_dict[key].copy()
 
         new_dict.pop(self.address, None)
+        self.kv_store = new_kv_store
 
         """
             5. Now need to send other nodes their new key values
@@ -266,6 +267,7 @@ class ShardNodeWrapper(object):
                 new_kv_store = new_dict[key].copy()
 
         new_dict.pop(self.address, None)
+        self.kv_store = new_kv_store
 
         """
             4. Now need to send other nodes their new key values
