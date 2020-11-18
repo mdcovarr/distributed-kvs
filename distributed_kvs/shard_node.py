@@ -72,10 +72,10 @@ class ShardNodeWrapper(object):
         """
         address = os.environ.get('ADDRESS')
 
-        if address == '':
-            self.address = str(self.ip) + ':' + str(self.port)
-        else:
+        if address:
             self.address = address
+        else:
+            self.address = str(self.ip) + ':' + str(self.port)
 
     def run(self):
         """
@@ -144,13 +144,33 @@ class ShardNodeWrapper(object):
         # at this point we need to perform hashing
         # create id to shard_node dictionary
         view_list = list(new_view.split(','))
-
         hr = HashRing(nodes=view_list)
+        new_dict = {}
+
+        for key in view_list:
+            new_dict[key] = {}
 
         for key in self.kv_store:
-            print(hr.get_node(key))
+            new_address = hr.get_node(key)
+            new_dict[new_address][key] = self.kv_store[key]
 
-        return jsonify(response), code
+        """
+            Now need to determine which keys will stay
+            on this current node
+        """
+        new_kv_store = {}
+
+        for key in new_dict:
+            if key == self.address:
+                new_kv_store = new_dict[key].copy()
+
+        new_dict.pop(self.address, None)
+
+        """
+            Now need to send other nodes their new key values
+        """
+
+        return jsonify(new_dict), code
 
 
     def keys(self, key):
