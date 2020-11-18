@@ -109,12 +109,85 @@ class ShardNodeWrapper(object):
         :return status: the status of the HTTP PUT request
         """
         response = {}
-        contents = request.get_json()
 
         # TODO:
         # need to update view
         # need to tell other nodes to update their view
         # perform repartitioning of the keys
+
+        # Only accepting PUT requests
+        try:
+            contents = request.get_json()
+        except:
+            print('Error: Invalid json')
+
+        try:
+            new_view = contents['view']
+        except:
+            print('Error: unable to get new view key value from json')
+
+        # at this point we need to perform hashing
+        # create id to shard_node dictionary
+        view_list = list(new_view.split(','))
+        hr = HashRing(nodes=view_list)
+        new_dict = {}
+
+        """
+            1. Update VIEW
+        """
+        self.view = view_list
+
+        """
+            2. Hash keys
+        """
+        for key in view_list:
+            new_dict[key] = {}
+
+        for key in self.kv_store:
+            new_address = hr.get_node(key)
+            new_dict[new_address][key] = self.kv_store[key]
+
+        """
+            3. Tell all other nodes in old view to re hash keys
+        """
+        for node_address in self.view:
+            # do not execute loop if node_address is our own address
+            if node_address == self.address:
+                continue
+
+            url = os.path.join('http://', node_address, 'proxy/view-change')
+
+            try:
+                resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
+            except:
+                print('Error: cannot notify shard node of view change')
+
+        """
+            4. Now need to determine which keys will stay
+            on this current node
+        """
+        new_kv_store = {}
+
+        for key in new_dict:
+            if key == self.address:
+                new_kv_store = new_dict[key].copy()
+
+        new_dict.pop(self.address, None)
+
+        """
+            5. Now need to send other nodes their new key values
+        """
+        for node_address in new_dict:
+            url = os.path.join('http://', node_address, 'proxy/receive-dict')
+            payload = new_dict[node_address]
+
+            try:
+                resp = requests.put(url, json=json.dumps(payload), timeout=myconstants.TIMEOUT)
+            except:
+                print('TODO: better error handling sending dictionary to another shard node')
+
+
+        # TODO correct response -------------
 
         response['message'] = 'View change successful'
         response['shards'] = []
