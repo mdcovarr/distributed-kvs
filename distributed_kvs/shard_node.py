@@ -132,23 +132,9 @@ class ShardNodeWrapper(object):
         hr = HashRing(nodes=view_list)
         new_dict = {}
 
-        """
-            1. Update VIEW
-        """
-        self.view = view_list
 
         """
-            2. Hash keys
-        """
-        for key in view_list:
-            new_dict[key] = {}
-
-        for key in self.kv_store:
-            new_address = hr.get_node(key)
-            new_dict[new_address][key] = self.kv_store[key]
-
-        """
-            3. Tell all other nodes in old view to re hash keys
+            1. Tell all other nodes in old view to re hash keys
         """
         for node_address in self.view:
             # do not execute loop if node_address is our own address
@@ -161,6 +147,21 @@ class ShardNodeWrapper(object):
                 resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
             except:
                 print('Error: cannot notify shard node of view change')
+
+        """
+            2. Hash keys
+        """
+        for key in view_list:
+            new_dict[key] = {}
+
+        for key in self.kv_store:
+            new_address = hr.get_node(key)
+            new_dict[new_address][key] = self.kv_store[key]
+
+        """
+            3. Update VIEW
+        """
+        self.view = view_list
 
         """
             4. Now need to determine which keys will stay
@@ -179,19 +180,37 @@ class ShardNodeWrapper(object):
         """
         for node_address in new_dict:
             url = os.path.join('http://', node_address, 'proxy/receive-dict')
-            payload = new_dict[node_address]
+            payload = json.dumps(new_dict[node_address])
 
             try:
-                resp = requests.put(url, json=json.dumps(payload), timeout=myconstants.TIMEOUT)
+                resp = requests.put(url, json=payload, timeout=myconstants.TIMEOUT)
             except:
                 print('TODO: better error handling sending dictionary to another shard node')
 
 
-        # TODO correct response -------------
-
+        """
+            6. Hopefully by this time we all nodes are done resharding so query for meta data
+        """
         response['message'] = 'View change successful'
         response['shards'] = []
         code = 200
+
+        for node_address in self.view:
+            node_data = {}
+
+            if node_address == self.address:
+                node_data['address'] = self.address
+                node_data['key-count'] = len(self.kv_store)
+            else:
+                node_data['address'] = node_address
+                url = os.path.join('http://', node_address, 'kvs/key-count')
+
+                resp = requests.get(url, timeout=myconstants.TIMEOUT)
+
+                json_resp = json.loads(resp.text)
+                node_data['key-count'] = json_resp['key-count']
+
+            response['shards'].append(node_data)
 
         return jsonify(response), code
 
@@ -202,7 +221,6 @@ class ShardNodeWrapper(object):
         node who received the initial /view-change from the client
         """
         response = {}
-        response['message'] = 'View change successful'
         code = 200
 
         # Only accepting PUT requests
@@ -274,7 +292,7 @@ class ShardNodeWrapper(object):
         code = 200
 
         try:
-            contents = request.get_json()
+            contents = json.loads(request.get_json())
         except:
             print('Error: Invalid Json')
 
