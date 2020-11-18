@@ -181,7 +181,7 @@ class ShardNodeWrapper(object):
             except:
                 print('TODO: better error handling sending dictionary to another shard node')
 
-        return jsonify(new_dict), code
+        return jsonify(response), code
 
     def proxy_receive_dict(self):
         """
@@ -198,10 +198,10 @@ class ShardNodeWrapper(object):
         except:
             print('Error: Invalid Json')
 
-        print(contents)
+        # Just need to add new keys to store
+        self.kv_store = {**self.kv_store, **contents}
 
         return jsonify(response), code
-
 
     def keys(self, key):
         """
