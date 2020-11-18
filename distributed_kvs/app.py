@@ -1,9 +1,8 @@
 """
     Main entrance of REST Server
 
-    Need to determine if there is a FORWARDING_ADDRESS value in the
-    environment. If yes, we start a 'follower' or 'proxy' node.
-    If no, we start a 'main' node.
+
+    VIEW and ADDRESS environment variables will be set in deployment
 """
 
 from flask import Flask
