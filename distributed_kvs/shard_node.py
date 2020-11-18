@@ -61,7 +61,6 @@ class ShardNodeWrapper(object):
         try:
             # This is for deployment environment
             self.view = view_string.split(',')
-            self.view.remove(self.address)
         except AttributeError:
             # this is for development environment
             self.view = []
@@ -150,6 +149,14 @@ class ShardNodeWrapper(object):
         hr = HashRing(nodes=view_list)
         new_dict = {}
 
+        """
+            1. Update VIEW
+        """
+        self.view = view_list
+
+        """
+            2. Hash keys
+        """
         for key in view_list:
             new_dict[key] = {}
 
@@ -158,7 +165,7 @@ class ShardNodeWrapper(object):
             new_dict[new_address][key] = self.kv_store[key]
 
         """
-            Now need to determine which keys will stay
+            3. Now need to determine which keys will stay
             on this current node
         """
         new_kv_store = {}
@@ -170,7 +177,7 @@ class ShardNodeWrapper(object):
         new_dict.pop(self.address, None)
 
         """
-            Now need to send other nodes their new key values
+            4. Now need to send other nodes their new key values
         """
         for node_address in new_dict:
             url = os.path.join('http://', node_address, 'proxy/receive-dict')
@@ -228,6 +235,10 @@ class ShardNodeWrapper(object):
                 proxy_path = 'proxy/kvs/keys'
 
                 for node_address in self.view:
+                    # don't execute loop if node_address is address of current shard node
+                    if node_address == self.address:
+                        continue
+
                     url = os.path.join('http://', node_address, proxy_path, key)
 
                     try:
@@ -301,6 +312,10 @@ class ShardNodeWrapper(object):
                 proxy_path = 'proxy/kvs/keys'
 
                 for node_address in self.view:
+                    # don't execute loop if node_address is address of current shard node
+                    if node_address == self.address:
+                        continue
+
                     url = os.path.join('http://', node_address, proxy_path, key)
 
                     try:
@@ -352,6 +367,10 @@ class ShardNodeWrapper(object):
                 proxy_path = 'proxy/kvs/keys'
 
                 for node_address in self.view:
+                    # don't execute loop if node_address is address of current shard node
+                    if node_address == self.address:
+                        continue
+
                     url = os.path.join('http://', node_address, proxy_path, key)
 
                     try:
