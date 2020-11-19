@@ -379,6 +379,9 @@ class ShardNodeWrapper(object):
             """
 
             try:
+                # data = request.data
+                # content = json.loads(data)
+
                 content = request.get_json()
             except:
                 # Error: Invalid Json format
