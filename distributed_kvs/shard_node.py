@@ -186,6 +186,9 @@ class ShardNodeWrapper(object):
             """
 
             try:
+                # data = request.data
+                # content = json.loads(data)
+
                 content = request.get_json()
             except:
                 # Error: Invalid Json format
@@ -224,7 +227,7 @@ class ShardNodeWrapper(object):
                                 We found the key on another Shard Node
                                 now forward response back to client
                             """
-                            resp = requests.put(url, timeout=myconstants.TIMEOUT)
+                            resp = requests.put(url, json={'value': content['value']}, timeout=myconstants.TIMEOUT)
 
                             return resp.text, resp.status_code
 
@@ -274,7 +277,7 @@ class ShardNodeWrapper(object):
                         proxy_path = 'proxy/kvs/keys'
                         url = os.path.join('http://', min_node_address, proxy_path, key)
 
-                        resp = requests.put(url, timeout=myconstants.TIMEOUT)
+                        resp = requests.put(url, json={'value': content['value']}, timeout=myconstants.TIMEOUT)
 
                         return resp.text, resp.status_code
 
