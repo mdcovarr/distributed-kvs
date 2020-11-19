@@ -8,8 +8,8 @@ CSE 138 at University of California, Santa Cruz (UCSC)
 |                               |                               |                               |
 | ----------------------------- | ----------------------------- | ----------------------------- |
 |**Name:** Michael Covarrubias  |**Name:** Rashmi Chennagiri    |**Name:** Nazib Sorathiya      |
-|**CruzID:** mdcovarr           |**CruzID:**                    |**CruzID:**                    |
-|**Email:** mdcovarr@ucsc.edu   |**Email:**                     |**Email:**                     |
+|**CruzID:** mdcovarr           |**CruzID:**  rchennag          |**CruzID:**  nssorath          |
+|**Email:** mdcovarr@ucsc.edu   |**Email:**  rchennag@ucsc.edu  |**Email:** nssorath@ucsc.edu   |
 
 # Grab Repository
 1. Open terminal
