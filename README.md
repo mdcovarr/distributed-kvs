@@ -202,3 +202,29 @@ and **key5** will be distributed to node3 (the newlly added node)
                  v                                     v                         v
 ```
 
+This same process of re hashing, determining which keys to keep, and what keys to
+send to other nodes in the view is also done by all other nodes in the **view**
+
+4. Once this view change is complete we respond to the client. In this case
+the client initially sent request to node1. So node1 will respond
+
+```
+             +--------+                             +-------+
+             | client |                             | Node1 |
+             +--------+                             +-------+
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 | <--------------response-----------  |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 v                                     v
+```
