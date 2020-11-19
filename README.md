@@ -112,14 +112,41 @@ Needs to send out all other keys
 ## View Change Algorithm
 1.
 ```
-            +----------+              +----------+
-            |  shard1  |              |  shard2  |
-            |  (node1) |              |  (node2) |
-            |  ------  |              |  ------  |
-            |  - key1  |              |  - key2  |
-            |  - key3  |              |  - key4  |
-            |  - key5  |              |          |
-            +----------+              +----------+
+  VIEW='10.10.0.4:13800,10.10.0.5:13800'
+
+
+            +-----------------+              +-----------------+
+            |     shard1      |              |     shard2      |
+            |     (node1)     |              |     (node2)     |
+            | 10.10.0.4:13800 |              | 10.10.0.5:13800 |
+            |  ------         |              |  ------         |
+            |  - key1         |              |  - key2         |
+            |  - key3         |              |  - key4         |
+            |  - key5         |              |                 |
+            +-----------------+              +-----------------+
 ```
 
-2.
+2. Then there is a view change trigger to **node1**. `http://10.10.0.4:13800/kvs/view-change` to `VIEW=10.10.0.4:13800,10.10.0.5:13800,10.10.0.6:13800`
+
+Hence there is an added node. Node1 needs to tell the rest of the nodes in the current view
+that there is a view change. Hence tell **node2**. **Node1** does so by sending **node2**
+a `PUT` request via `http://10.10.0.5:13800/proxy/view-change`. `PUT` requests to
+`/proxy/view-change` let's other nodes in the view know there is a view change request, and
+also let's the nodes know that they were not queried directly by the client.
+
+```
+
+
+            +-----------------+                                +-----------------+
+            |     shard1      |                                |     shard2      |
+            |     (node1)     |                                |     (node2)     |
+            | 10.10.0.4:13800 |    PUT /proxy/view-change      | 10.10.0.5:13800 |
+            |  ------         | --------------------------->   |  ------         |
+            |  - key1         |                                |  - key2         |
+            |  - key3         |                                |  - key4         |
+            |  - key5         |                                |                 |
+            +-----------------+                                +-----------------+
+```
+
+Once this is complete **every** node in the old view starts to re hash their **own** keys
+Hence, node1 will re hash **key1, key3, key5** and node2 re hashes **key2, key4**
