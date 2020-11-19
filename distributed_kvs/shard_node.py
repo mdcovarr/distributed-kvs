@@ -14,10 +14,10 @@ class ShardNodeWrapper(object):
         Class object to wrapp around Flask server and
         needed variables e.g., key-value store
     """
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, view):
         self.app = Flask(__name__)                  # The Flask Server (Node)
         self.kv_store = {}                          # The local key-value store
-        self.view = []                              # The view, IP and PORT address of other nodes
+        self.view = view.split(',')                 # The view, IP and PORT address of other nodes
         self.ip = ip
         self.port = port
         self.address = ''
@@ -63,7 +63,7 @@ class ShardNodeWrapper(object):
             self.view = view_string.split(',')
         except AttributeError:
             # this is for development environment
-            self.view = []
+            pass
 
 
     def setup_address(self):
@@ -421,7 +421,7 @@ class ShardNodeWrapper(object):
                                 We found the key on another Shard Node
                                 now forward response back to client
                             """
-                            resp = requests.put(url, timeout=myconstants.TIMEOUT)
+                            resp = requests.put(url, json=content, timeout=myconstants.TIMEOUT)
 
                             return resp.text, resp.status_code
 
@@ -474,7 +474,7 @@ class ShardNodeWrapper(object):
                         proxy_path = 'proxy/kvs/keys'
                         url = os.path.join('http://', min_node_address, proxy_path, key)
 
-                        resp = requests.put(url, timeout=myconstants.TIMEOUT)
+                        resp = requests.put(url, json=content, timeout=myconstants.TIMEOUT)
 
                         return resp.text, resp.status_code
 
@@ -578,13 +578,23 @@ class ShardNodeWrapper(object):
 
             # We will have a valid value and key as the validation is done in the main node
             content = request.get_json()
-            self.kv_store[key] = content['value']
-            message = myconstants.UPDATED_MESSAGE
-            code = 200
+            value = content['value']
 
-            response['replaced'] = True
+            # at this point we have a valid value and key
+            if key in self.kv_store:
+                replaced = True
+                message = myconstants.UPDATED_MESSAGE
+                code = 200
+            else:
+                replaced = False
+                message = myconstants.ADDED_MESSAGE
+                code = 201
+
+            response['replaced'] = replaced
             response['message'] = message
             response['address'] = self.address
+
+            self.kv_store[key] = value
 
             return jsonify(response), code
 
