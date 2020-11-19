@@ -435,10 +435,56 @@ class ShardNodeWrapper(object):
                         return jsonify(res_dict), status_code
 
                 # Not present in any of the other nodes
-                self.kv_store[key] = content['value']
-                response['replaced'] = False
-                response['message'] = myconstants.ADDED_MESSAGE
-                code = 201
+                # Will have to get the key_count from all the nodes to balance the insertion.
+                min_key_count = len(self.kv_store)
+                min_node_address = self.address
+
+                path = '/kvs/key-count'
+                for node_address in self.view:
+                    url = os.path.join('http://', node_address, path)
+                    try:
+                        resp = requests.get(url, timeout=myconstants.TIMEOUT)
+                        resp_dict = json.loads(resp.text)
+
+                        if min_key_count > resp_dict['key-count']:
+                            min_key_count = resp_dict['key-count']
+                            min_node_address = node_address
+
+                    # except (requests.Timeout, requests.exceptions.ConnectionError):
+                    #     # Shard Node we are forwarding to was down
+                    #     error = 'Main instance is down'
+                    #     message = 'Error in PUT'
+                    #     status_code = 503
+                    #     res_dict = {'error': error, 'message': message}
+                    #
+                    #     return jsonify(res_dict), status_code
+                    except Exception:
+                        pass
+
+                if min_node_address == self.address:
+                    self.kv_store[key] = content['value']
+                    response['replaced'] = False
+                    response['message'] = myconstants.ADDED_MESSAGE
+                    code = 201
+                else:
+                    try:
+                        proxy_path = 'proxy/kvs/keys'
+                        url = os.path.join('http://', min_node_address, proxy_path, key)
+
+                        resp = requests.put(url, timeout=myconstants.TIMEOUT)
+
+                        return resp.text, resp.status_code
+
+                    except (requests.Timeout, requests.exceptions.ConnectionError):
+                        # Shard Node we are forwarding to was down
+                        error = 'Main instance is down'
+                        message = 'Error in PUT'
+                        status_code = 503
+                        res_dict = {'error': error, 'message': message}
+
+                        return jsonify(res_dict), status_code
+
+
 
             return jsonify(response), code
 
