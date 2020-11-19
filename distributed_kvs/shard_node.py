@@ -439,8 +439,11 @@ class ShardNodeWrapper(object):
                 min_key_count = len(self.kv_store)
                 min_node_address = self.address
 
-                path = '/kvs/key-count'
+                path = 'kvs/key-count'
                 for node_address in self.view:
+                    if node_address == self.address:
+                        continue
+
                     url = os.path.join('http://', node_address, path)
                     try:
                         resp = requests.get(url, timeout=myconstants.TIMEOUT)
@@ -498,7 +501,7 @@ class ShardNodeWrapper(object):
 
                 response['doesExist'] = True
                 response['message'] = myconstants.DELETE_SUCCESS_MESSAGE
-                response['address'] = self.address
+
                 code = 200
             else:
                 """

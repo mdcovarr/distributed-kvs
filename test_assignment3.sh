@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-
 # ------------------------------
 # Run Docker containers
 docker network create --subnet=10.10.0.0/16 kv_subnet
@@ -22,14 +20,14 @@ docker run --name="node2"        --net=kv_subnet     \
            -e ADDRESS="${addr2}"                     \
            -e VIEW=${initial_full_view}              \
            kv-store:3.0
-
-# node3 will not be added to the existing database until view-change, but we can initialize it here.
+           
+# node3 will not be added to the existing database until view-change, but we can initialize it here. 
 docker run --name="node3"        --net=kv_subnet     \
            --ip=10.10.0.6        -d -p 13803:13800   \
            -e ADDRESS="${addr3}"                     \
            -e VIEW="${full_view}"                    \
            kv-store:3.0
-
+           
 sleep 5
 
 python tests/test_assignment3.py
