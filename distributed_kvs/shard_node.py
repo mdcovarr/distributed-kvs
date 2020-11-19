@@ -22,6 +22,7 @@ class ShardNodeWrapper(object):
         self.port = port
         self.address = ''
 
+
     def setup_routes(self):
         """
         Method used to set up the url rules for the Flask app
@@ -49,6 +50,7 @@ class ShardNodeWrapper(object):
         self.app.add_url_rule(
                 rule='/proxy/receive-dict', endpoint='proxy_receive_dict', view_func=self.proxy_receive_dict, methods=['PUT'])
 
+
     def setup_view(self):
         """
         Method to setup the view of the current node
@@ -62,6 +64,7 @@ class ShardNodeWrapper(object):
         except AttributeError:
             # this is for development environment
             self.view = []
+
 
     def setup_address(self):
         """
@@ -77,12 +80,14 @@ class ShardNodeWrapper(object):
         else:
             self.address = str(self.ip) + ':' + str(self.port)
 
+
     def run(self):
         """
         Method to start flask server
         :return None:
         """
         self.app.run(host=self.ip, port=self.port)
+
 
     def key_count(self):
         """
@@ -107,11 +112,6 @@ class ShardNodeWrapper(object):
         :return status: the status of the HTTP PUT request
         """
         response = {}
-
-        # TODO:
-        # need to update view
-        # need to tell other nodes to update their view
-        # perform repartitioning of the keys
 
         # Only accepting PUT requests
         try:
@@ -213,6 +213,7 @@ class ShardNodeWrapper(object):
 
         return jsonify(response), code
 
+
     def proxy_view_change(self):
         """
         Method to handle receiving a proxy view change. If a node
@@ -281,6 +282,7 @@ class ShardNodeWrapper(object):
 
         return jsonify(response), code
 
+
     def proxy_receive_dict(self):
         """
         Function used to handle the receiving of a json kv store
@@ -300,6 +302,7 @@ class ShardNodeWrapper(object):
         self.kv_store = {**self.kv_store, **contents}
 
         return jsonify(response), code
+
 
     def keys(self, key):
         """
