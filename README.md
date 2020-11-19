@@ -94,3 +94,137 @@ Output will look similar to below:
  * Debug mode: off
  * Running on http://0.0.0.0:13800/ (Press CTRL+C to quit)
 ```
+
+
+### Proxy change-view
+```
+Needs to revceive new view
+Needs to create id to shard node
+Needs to rehash the keys
+Needs to determine which keys it will keep
+Needs to send out all other keys
+```
+
+
+
+
+
+## View Change Algorithm
+1.
+```
+  VIEW='10.10.0.4:13800,10.10.0.5:13800'
+
+
+            +-----------------+              +-----------------+
+            |     shard1      |              |     shard2      |
+            |     (node1)     |              |     (node2)     |
+            | 10.10.0.4:13800 |              | 10.10.0.5:13800 |
+            |  ------         |              |  ------         |
+            |  - key1         |              |  - key2         |
+            |  - key3         |              |  - key4         |
+            |  - key5         |              |                 |
+            +-----------------+              +-----------------+
+```
+
+2. Then there is a view change trigger to **node1**. `http://10.10.0.4:13800/kvs/view-change` to `VIEW=10.10.0.4:13800,10.10.0.5:13800,10.10.0.6:13800`
+
+Hence there is an added node. Node1 needs to tell the rest of the nodes in the current view
+that there is a view change. Hence tell **node2**. **Node1** does so by sending **node2**
+a `PUT` request via `http://10.10.0.5:13800/proxy/view-change`. `PUT` requests to
+`/proxy/view-change` let's other nodes in the view know there is a view change request, and
+also let's the nodes know that they were not queried directly by the client.
+
+```
+
+
+            +-----------------+                                +-----------------+
+            |     shard1      |                                |     shard2      |
+            |     (node1)     |                                |     (node2)     |
+            | 10.10.0.4:13800 |    PUT /proxy/view-change      | 10.10.0.5:13800 |
+            |  ------         | --------------------------->   |  ------         |
+            |  - key1         |                                |  - key2         |
+            |  - key3         |                                |  - key4         |
+            |  - key5         |                                |                 |
+            +-----------------+                                +-----------------+
+```
+
+Once this is complete **every** node in the old view knows there is a view change in place
+and they all start to re hash their **own** keys
+Hence, node1 will re hash **key1, key3, key5** and node2 re hashes **key2, key4**
+
+3. The re hashing is now done with information of the new view
+`VIEW=10.10.0.4:13800,10.10.0.5:13800,10.10.0.6:13800`
+given that there are 3 nodes now, the re hashing will be done in order to determine where
+a node will distribute it's keys to. (Assuming `node3 = 10.10.0.6:13800`) For example,
+node1 will need to re hash it's keys **key1, key3, key5** and determine which keys
+will stay locally at node1, and which nodes will be distributed to **node2** and **node3**
+
+Example: thus after node1 finishes re hashing it will come up with some dictionary as such
+```
+new_distribution = {
+  "10.10.0.4:13800": {"key1": "value1"},
+  "10.10.0.5:13800": {"key3": "value3"},
+  "10.10.0.6:13800": {"key5"}: "value5"}
+}
+```
+
+Meaning that **key1** will stay on itself (node1), **key3** will be distributed to node2
+and **key5** will be distributed to node3 (the newlly added node)
+
+```
+             +--------+                             +-------+               +-------+
+             | Node 1 |                             | Node2 |               | Node3 |
+             +--------+                             +-------+               +-------+
+                 |                                     |                         |
+                 |                                     |                         |
+                 |     PUT /proxy/receive-dict         |                         |
+                 |       {"key3": "value3"}            |                         |
+                 | ---------------request----------->  |                         |
+                 |                                     |                         |
+                 |                                     |                         |
+                 |     PUT /proxy/receive-dict         |                         |
+                 |       {"key5": "value5"}            |                         |
+                 | --------------------request---------------------------------> |
+                 |                                     |                         |
+                 |                                     |                         |
+                 |                                     |                         |
+                 | <--------------response-----------  |                         |
+                 |                                     |                         |
+                 |                                     |                         |
+                 | <------------------------response---------------------------- |
+                 |                                     |                         |
+                 |                                     |                         |
+                 |                                     |                         |
+                 |                                     |                         |
+                 |                                     |                         |
+                 |                                     |                         |
+                 |                                     |                         |
+                 v                                     v                         v
+```
+
+This same process of re hashing, determining which keys to keep, and what keys to
+send to other nodes in the view is also done by all other nodes in the **view**
+
+4. Once this view change is complete we respond to the client. In this case
+the client initially sent request to node1. So node1 will respond
+
+```
+             +--------+                             +-------+
+             | client |                             | Node1 |
+             +--------+                             +-------+
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 | <--------------response-----------  |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 |                                     |
+                 v                                     v
+```
