@@ -32,7 +32,7 @@ docker run --name="node3"        --net=kv_subnet     \
 
 sleep 5
 
-python tests/test_assignment3_test2.py
+python tests/test_assignment3.py
 
 docker kill node1 node2 node3
 docker rm node1 node2 node3

@@ -94,3 +94,32 @@ Output will look similar to below:
  * Debug mode: off
  * Running on http://0.0.0.0:13800/ (Press CTRL+C to quit)
 ```
+
+
+### Proxy change-view
+```
+Needs to revceive new view
+Needs to create id to shard node
+Needs to rehash the keys
+Needs to determine which keys it will keep
+Needs to send out all other keys
+```
+
+
+
+
+
+## View Change Algorithm
+1.
+```
+            +----------+              +----------+
+            |  shard1  |              |  shard2  |
+            |  (node1) |              |  (node2) |
+            |  ------  |              |  ------  |
+            |  - key1  |              |  - key2  |
+            |  - key3  |              |  - key4  |
+            |  - key5  |              |          |
+            +----------+              +----------+
+```
+
+2.
