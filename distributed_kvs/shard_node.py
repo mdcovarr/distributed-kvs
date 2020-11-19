@@ -44,9 +44,7 @@ class ShardNodeWrapper(object):
         self.app.add_url_rule(
                 rule='/proxy/kvs/keys/<string:key>', endpoint='proxy_keys', view_func=self.proxy_keys, methods=['GET', 'PUT', 'DELETE'])
         self.app.add_url_rule(
-                rule='/proxy/kvs/keys/<string:key>', endpoint='proxy_keys', view_func=self.proxy_keys, methods=['GET', 'PUT', 'DELETE'])
-        self.app.add_url_rule(
-                rule='/proxy/kvs/view-change', endpoint='proxy_view_change', view_func=self.proxy_view_change, methods=['PUT'])
+                rule='/proxy/view-change', endpoint='proxy_view_change', view_func=self.proxy_view_change, methods=['PUT'])
         # receive dictionary from other nodes
         self.app.add_url_rule(
                 rule='/proxy/receive-dict', endpoint='proxy_receive_dict', view_func=self.proxy_receive_dict, methods=['PUT'])
