@@ -7,6 +7,7 @@ import json
 import requests
 import myconstants
 import os
+import sys
 
 class ShardNodeWrapper(object):
     """
@@ -77,7 +78,7 @@ class ShardNodeWrapper(object):
         Method to start flask server
         :return None:
         """
-        self.app.run(host=self.ip, port=self.port)
+        self.app.run(host=self.ip, port=self.port, debug=True)
 
     def key_count(self):
         """
@@ -246,13 +247,23 @@ class ShardNodeWrapper(object):
                 min_node_address = self.address
 
                 path = '/kvs/key-count'
+                print('TEST | self.view', self.view, file=sys.stderr)
+                print('TEST | Finding the minimum key count from all nodes', file = sys.stderr)
                 for node_address in self.view:
-                    url = os.path.join('http://', node_address, path)
+                    print('TEST | node_address: ', node_address, file=sys.stderr)
+                    #TODO
+                    #url = os.path.join('http://', node_address, path)
+                    url = 'http://' + node_address + path
+                    print('TEST | URL: ', url, file=sys.stderr)
                     try:
                         resp = requests.get(url, timeout=myconstants.TIMEOUT)
                         resp_dict = json.loads(resp.text)
 
+                        print('TEST | min_key_count: ', min_key_count, file=sys.stderr)
+                        print('TEST | resp_dict[key-count]: ', resp_dict['key-count'], file=sys.stderr)
+
                         if min_key_count > resp_dict['key-count']:
+                            print('Setting the min key count and address: ', resp_dict['key-count'], ' : ', node_address, file=sys.stderr)
                             min_key_count = resp_dict['key-count']
                             min_node_address = node_address
 
@@ -267,14 +278,21 @@ class ShardNodeWrapper(object):
                     except Exception:
                         pass
 
+                print('TEST | min_node_address: ', min_node_address, file=sys.stderr)
+                print('TEST | self.address: ', self.address, file=sys.stderr)
+
                 if min_node_address == self.address:
+
+                    print('TEST | Adding to the current node', file=sys.stderr)
                     self.kv_store[key] = content['value']
                     response['replaced'] = False
                     response['message'] = myconstants.ADDED_MESSAGE
                     code = 201
                 else:
                     try:
+                        print('TEST | Passing the key to other node', file=sys.stderr)
                         proxy_path = 'proxy/kvs/keys'
+
                         url = os.path.join('http://', min_node_address, proxy_path, key)
 
                         resp = requests.put(url, json={'value': content['value']}, timeout=myconstants.TIMEOUT)
@@ -376,12 +394,20 @@ class ShardNodeWrapper(object):
         if request.method == 'PUT':
 
             # We will have a valid value and key as the validation is done in the main node
-            content = request.get_json()
-            self.kv_store[key] = content['value']
-            message = myconstants.UPDATED_MESSAGE
-            code = 200
+            if key in self.kv_store:
+                content = request.get_json()
+                self.kv_store[key] = content['value']
+                message = myconstants.UPDATED_MESSAGE
+                code = 200
+                replaced = True
+            else:
+                content = request.get_json()
+                self.kv_store[key] = content['value']
+                message = myconstants.ADDED_MESSAGE
+                code = 201
+                replaced = False
 
-            response['replaced'] = True
+            response['replaced'] = replaced
             response['message'] = message
             response['address'] = self.address
 
