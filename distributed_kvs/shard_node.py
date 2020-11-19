@@ -3,6 +3,7 @@
 """
 
 from flask import Flask, request, jsonify
+from uhashring import HashRing
 import json
 import requests
 import myconstants
@@ -14,13 +15,14 @@ class ShardNodeWrapper(object):
         Class object to wrapp around Flask server and
         needed variables e.g., key-value store
     """
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, view):
         self.app = Flask(__name__)                  # The Flask Server (Node)
         self.kv_store = {}                          # The local key-value store
-        self.view = []                              # The view, IP and PORT address of other nodes
+        self.view = view.split(',')                 # The view, IP and PORT address of other nodes
         self.ip = ip
         self.port = port
         self.address = ''
+
 
     def setup_routes(self):
         """
@@ -43,6 +45,12 @@ class ShardNodeWrapper(object):
         """
         self.app.add_url_rule(
                 rule='/proxy/kvs/keys/<string:key>', endpoint='proxy_keys', view_func=self.proxy_keys, methods=['GET', 'PUT', 'DELETE'])
+        self.app.add_url_rule(
+                rule='/proxy/view-change', endpoint='proxy_view_change', view_func=self.proxy_view_change, methods=['PUT'])
+        # receive dictionary from other nodes
+        self.app.add_url_rule(
+                rule='/proxy/receive-dict', endpoint='proxy_receive_dict', view_func=self.proxy_receive_dict, methods=['PUT'])
+
 
     def setup_view(self):
         """
@@ -54,10 +62,10 @@ class ShardNodeWrapper(object):
         try:
             # This is for deployment environment
             self.view = view_string.split(',')
-            self.view.remove(self.address)
         except AttributeError:
             # this is for development environment
-            self.view = []
+            pass
+
 
     def setup_address(self):
         """
@@ -68,10 +76,11 @@ class ShardNodeWrapper(object):
         """
         address = os.environ.get('ADDRESS')
 
-        if address == '':
-            self.address = str(self.ip) + ':' + str(self.port)
-        else:
+        if address:
             self.address = address
+        else:
+            self.address = str(self.ip) + ':' + str(self.port)
+
 
     def run(self):
         """
@@ -79,6 +88,7 @@ class ShardNodeWrapper(object):
         :return None:
         """
         self.app.run(host=self.ip, port=self.port, debug=True)
+
 
     def key_count(self):
         """
@@ -103,18 +113,197 @@ class ShardNodeWrapper(object):
         :return status: the status of the HTTP PUT request
         """
         response = {}
-        contents = request.get_json()
 
-        # TODO:
-        # need to update view
-        # need to tell other nodes to update their view
-        # perform repartitioning of the keys
+        # Only accepting PUT requests
+        try:
+            contents = request.get_json()
+        except:
+            print('Error: Invalid json')
 
+        try:
+            new_view = contents['view']
+        except:
+            print('Error: unable to get new view key value from json')
+
+        # at this point we need to perform hashing
+        # create id to shard_node dictionary
+        view_list = list(new_view.split(','))
+        hr = HashRing(nodes=view_list)
+        new_dict = {}
+
+
+        """
+            1. Tell all other nodes in old view to re hash keys
+        """
+        for node_address in self.view:
+            # do not execute loop if node_address is our own address
+            if node_address == self.address:
+                continue
+
+            url = os.path.join('http://', node_address, 'proxy/view-change')
+
+            try:
+                resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
+            except:
+                print('Error: cannot notify shard node of view change')
+
+        """
+            2. Hash keys
+        """
+        for key in view_list:
+            new_dict[key] = {}
+
+        for key in self.kv_store:
+            new_address = hr.get_node(key)
+            new_dict[new_address][key] = self.kv_store[key]
+
+        """
+            3. Update VIEW
+        """
+        self.view = view_list
+
+        """
+            4. Now need to determine which keys will stay
+            on this current node
+        """
+        new_kv_store = {}
+
+        for key in new_dict:
+            if key == self.address:
+                new_kv_store = new_dict[key].copy()
+
+        new_dict.pop(self.address, None)
+        self.kv_store = new_kv_store
+
+        """
+            5. Now need to send other nodes their new key values
+        """
+        for node_address in new_dict:
+            url = os.path.join('http://', node_address, 'proxy/receive-dict')
+            payload = json.dumps(new_dict[node_address])
+
+            try:
+                resp = requests.put(url, json=payload, timeout=myconstants.TIMEOUT)
+            except:
+                print('TODO: better error handling sending dictionary to another shard node')
+
+
+        """
+            6. Hopefully by this time we all nodes are done resharding so query for meta data
+        """
         response['message'] = 'View change successful'
         response['shards'] = []
         code = 200
 
+        for node_address in self.view:
+            node_data = {}
+
+            if node_address == self.address:
+                node_data['address'] = self.address
+                node_data['key-count'] = len(self.kv_store)
+            else:
+                node_data['address'] = node_address
+                url = os.path.join('http://', node_address, 'kvs/key-count')
+
+                resp = requests.get(url, timeout=myconstants.TIMEOUT)
+
+                json_resp = json.loads(resp.text)
+                node_data['key-count'] = json_resp['key-count']
+
+            response['shards'].append(node_data)
+
         return jsonify(response), code
+
+
+    def proxy_view_change(self):
+        """
+        Method to handle receiving a proxy view change. If a node
+        receives a proxy view change, it means that another node was the
+        node who received the initial /view-change from the client
+        """
+        response = {}
+        code = 200
+
+        # Only accepting PUT requests
+        try:
+            contents = request.get_json()
+        except:
+            print('Error: Invalid json')
+
+        try:
+            new_view = contents['view']
+        except:
+            print('Error: unable to get new view key value from json')
+
+        # at this point we need to perform hashing
+        # create id to shard_node dictionary
+        view_list = list(new_view.split(','))
+        hr = HashRing(nodes=view_list)
+        new_dict = {}
+
+        """
+            1. Update VIEW
+        """
+        self.view = view_list
+
+        """
+            2. Hash keys
+        """
+        for key in view_list:
+            new_dict[key] = {}
+
+        for key in self.kv_store:
+            new_address = hr.get_node(key)
+            new_dict[new_address][key] = self.kv_store[key]
+
+        """
+            3. Now need to determine which keys will stay
+            on this current node
+        """
+        new_kv_store = {}
+
+        for key in new_dict:
+            if key == self.address:
+                new_kv_store = new_dict[key].copy()
+
+        new_dict.pop(self.address, None)
+        self.kv_store = new_kv_store
+
+        """
+            4. Now need to send other nodes their new key values
+        """
+        for node_address in new_dict:
+            url = os.path.join('http://', node_address, 'proxy/receive-dict')
+            payload = new_dict[node_address]
+
+            try:
+                resp = requests.put(url, json=json.dumps(payload), timeout=myconstants.TIMEOUT)
+            except:
+                print('TODO: better error handling sending dictionary to another shard node')
+
+        return jsonify(response), code
+
+
+    def proxy_receive_dict(self):
+        """
+        Function used to handle the receiving of a json kv store
+        from another shard node
+        """
+        # only accepts PUT requests
+        response = {}
+        response['message'] = myconstants.UPDATED_MESSAGE
+        code = 200
+
+        try:
+            contents = json.loads(request.get_json())
+        except:
+            print('Error: Invalid Json')
+
+        # Just need to add new keys to store
+        self.kv_store = {**self.kv_store, **contents}
+
+        return jsonify(response), code
+
 
     def keys(self, key):
         """
@@ -141,6 +330,10 @@ class ShardNodeWrapper(object):
                 proxy_path = 'proxy/kvs/keys'
 
                 for node_address in self.view:
+                    # don't execute loop if node_address is address of current shard node
+                    if node_address == self.address:
+                        continue
+
                     url = os.path.join('http://', node_address, proxy_path, key)
 
                     try:
@@ -217,6 +410,10 @@ class ShardNodeWrapper(object):
                 proxy_path = 'proxy/kvs/keys'
 
                 for node_address in self.view:
+                    # don't execute loop if node_address is address of current shard node
+                    if node_address == self.address:
+                        continue
+
                     url = os.path.join('http://', node_address, proxy_path, key)
 
                     try:
@@ -228,7 +425,7 @@ class ShardNodeWrapper(object):
                                 We found the key on another Shard Node
                                 now forward response back to client
                             """
-                            resp = requests.put(url, json={'value': content['value']}, timeout=myconstants.TIMEOUT)
+                            resp = requests.put(url, json=content, timeout=myconstants.TIMEOUT)
 
                             return resp.text, resp.status_code
 
@@ -246,56 +443,36 @@ class ShardNodeWrapper(object):
                 min_key_count = len(self.kv_store)
                 min_node_address = self.address
 
-                path = '/kvs/key-count'
-                print('TEST | self.view', self.view, file=sys.stderr)
-                print('TEST | Finding the minimum key count from all nodes', file = sys.stderr)
+                path = 'kvs/key-count'
                 for node_address in self.view:
-                    print('TEST | node_address: ', node_address, file=sys.stderr)
-                    #TODO
-                    #url = os.path.join('http://', node_address, path)
-                    url = 'http://' + node_address + path
-                    print('TEST | URL: ', url, file=sys.stderr)
+                    if node_address == self.address:
+                        continue
+
+                    url = os.path.join('http://', node_address, path)
                     try:
                         resp = requests.get(url, timeout=myconstants.TIMEOUT)
                         resp_dict = json.loads(resp.text)
 
-                        print('TEST | min_key_count: ', min_key_count, file=sys.stderr)
-                        print('TEST | resp_dict[key-count]: ', resp_dict['key-count'], file=sys.stderr)
-
                         if min_key_count > resp_dict['key-count']:
-                            print('Setting the min key count and address: ', resp_dict['key-count'], ' : ', node_address, file=sys.stderr)
                             min_key_count = resp_dict['key-count']
                             min_node_address = node_address
 
-                    # except (requests.Timeout, requests.exceptions.ConnectionError):
-                    #     # Shard Node we are forwarding to was down
-                    #     error = 'Main instance is down'
-                    #     message = 'Error in PUT'
-                    #     status_code = 503
-                    #     res_dict = {'error': error, 'message': message}
-                    #
-                    #     return jsonify(res_dict), status_code
                     except Exception:
                         pass
 
-                print('TEST | min_node_address: ', min_node_address, file=sys.stderr)
-                print('TEST | self.address: ', self.address, file=sys.stderr)
-
                 if min_node_address == self.address:
 
-                    print('TEST | Adding to the current node', file=sys.stderr)
                     self.kv_store[key] = content['value']
                     response['replaced'] = False
                     response['message'] = myconstants.ADDED_MESSAGE
                     code = 201
                 else:
                     try:
-                        print('TEST | Passing the key to other node', file=sys.stderr)
                         proxy_path = 'proxy/kvs/keys'
 
                         url = os.path.join('http://', min_node_address, proxy_path, key)
 
-                        resp = requests.put(url, json={'value': content['value']}, timeout=myconstants.TIMEOUT)
+                        resp = requests.put(url, json=content, timeout=myconstants.TIMEOUT)
 
                         return resp.text, resp.status_code
 
@@ -322,7 +499,7 @@ class ShardNodeWrapper(object):
 
                 response['doesExist'] = True
                 response['message'] = myconstants.DELETE_SUCCESS_MESSAGE
-                response['address'] = self.address
+
                 code = 200
             else:
                 """
@@ -331,6 +508,10 @@ class ShardNodeWrapper(object):
                 proxy_path = 'proxy/kvs/keys'
 
                 for node_address in self.view:
+                    # don't execute loop if node_address is address of current shard node
+                    if node_address == self.address:
+                        continue
+
                     url = os.path.join('http://', node_address, proxy_path, key)
 
                     try:
@@ -394,22 +575,24 @@ class ShardNodeWrapper(object):
         if request.method == 'PUT':
 
             # We will have a valid value and key as the validation is done in the main node
+            content = request.get_json()
+            value = content['value']
+
+            # at this point we have a valid value and key
             if key in self.kv_store:
-                content = request.get_json()
-                self.kv_store[key] = content['value']
+                replaced = True
                 message = myconstants.UPDATED_MESSAGE
                 code = 200
-                replaced = True
             else:
-                content = request.get_json()
-                self.kv_store[key] = content['value']
+                replaced = False
                 message = myconstants.ADDED_MESSAGE
                 code = 201
-                replaced = False
 
             response['replaced'] = replaced
             response['message'] = message
             response['address'] = self.address
+
+            self.kv_store[key] = value
 
             return jsonify(response), code
 
