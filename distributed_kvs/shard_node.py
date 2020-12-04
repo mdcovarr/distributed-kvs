@@ -71,6 +71,7 @@ class ShardNodeWrapper(object):
         """
         Determine which nodes in the view should be this nodes replica
         This is done via the VIEW and REPL_FACTOR
+        :return None:
         """
         replica_partitions = {}
 
@@ -86,9 +87,8 @@ class ShardNodeWrapper(object):
         for key in replica_partitions:
             value = replica_partitions[key]
             if self.address in value:
-                self.replicas = {}
-                self.replicas[key] = value
-
+                self.replicas = value
+                self.shard_id = str(key)
 
     def setup_address(self):
         """
@@ -124,6 +124,7 @@ class ShardNodeWrapper(object):
 
         response['message'] = 'Key count retrieved successfully'
         response['key-count'] = count
+        response['shard_id'] = self.shard_id
         code = 200
 
         return jsonify(response), code
