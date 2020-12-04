@@ -39,6 +39,8 @@ class ShardNodeWrapper(object):
                 rule='/kvs/view-change', endpoint='view_change', view_func=self.view_change, methods=['PUT'])
         self.app.add_url_rule(
                 rule='/kvs/keys/<string:key>', endpoint='keys', view_func=self.keys, methods=['GET', 'PUT', 'DELETE'])
+        self.app.add_url_rule(
+                rule='/kvs/shards', endpoint='shards', view_func=self.shards, methods=['GET'])
 
         """
             Proxy Routes
@@ -77,13 +79,18 @@ class ShardNodeWrapper(object):
 
         for i in range(len(self.view)):
             partition = (i % self.repl_factor) + 1
+            partition_str = str(partition)
 
             try:
-                replica_partitions[partition].append(self.view[i])
+                replica_partitions[partition_str].append(self.view[i])
             except KeyError:
-                replica_partitions[partition] = []
-                replica_partitions[partition].append(self.view[i])
+                replica_partitions[partition_str] = []
+                replica_partitions[partition_str].append(self.view[i])
 
+        # create dictionary for entire all shard_ids -> replicas
+        self.all_partitions = replica_partitions
+
+        # look for shard_id and replicas list for this node
         for key in replica_partitions:
             value = replica_partitions[key]
             if self.address in value:
@@ -126,6 +133,21 @@ class ShardNodeWrapper(object):
         response['key-count'] = count
         response['shard_id'] = self.shard_id
         code = 200
+
+        return jsonify(response), code
+
+    def shards(self):
+        """
+        Function used to get the list of shard id's in the current view
+        """
+        response = {}
+        code = 200
+
+        response['message'] = 'Shard membership retrieved successfully'
+
+        shards = list(self.all_partitions.keys())
+        shards.sort()
+        response['shards'] = shards
 
         return jsonify(response), code
 
