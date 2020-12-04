@@ -27,6 +27,9 @@ def handle_args():
     parser.add_argument('-v', '--view', dest='view', default='',
         help='Initial view for the distributed key value store shards')
 
+    parser.add_argument('-r', '--repl-factor', dest='repl_factor', type=int, default=1,
+         help='Argument used to determine the replication factor for the distributed key-value store')
+
     return parser.parse_args()
 
 if __name__ == '__main__':
@@ -34,8 +37,9 @@ if __name__ == '__main__':
         Code main entrance
     """
     args = handle_args()
-    app = ShardNodeWrapper(args.ip, args.port, args.view)
+    app = ShardNodeWrapper(args.ip, args.port, args.view, args.repl_factor)
     app.setup_routes()
     app.setup_address()
     app.setup_view()
+    app.setup_pototetial_replicas()
     app.run()

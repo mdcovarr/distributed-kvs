@@ -15,13 +15,14 @@ class ShardNodeWrapper(object):
         Class object to wrapp around Flask server and
         needed variables e.g., key-value store
     """
-    def __init__(self, ip, port, view):
+    def __init__(self, ip, port, view, repl_factor):
         self.app = Flask(__name__)                  # The Flask Server (Node)
         self.kv_store = {}                          # The local key-value store
         self.view = view.split(',')                 # The view, IP and PORT address of other nodes
         self.ip = ip
         self.port = port
         self.address = ''
+        self.repl_factor = repl_factor
 
 
     def setup_routes(self):
@@ -65,6 +66,22 @@ class ShardNodeWrapper(object):
         except AttributeError:
             # this is for development environment
             pass
+
+    def setup_pototetial_replicas(self):
+        """
+        Determine which nodes in the view should be this nodes replica
+        This is done via the VIEW and REPL_FACTOR
+        """
+        replica_partitions = {}
+
+        for i in range(len(self.view)):
+            partition = (i % self.repl_factor) + 1
+
+            try:
+                replica_partitions[partition].append(self.view[i])
+            except KeyError:
+                replica_partitions[partition] = []
+                replica_partitions[partition].append(self.view[i])
 
 
     def setup_address(self):
