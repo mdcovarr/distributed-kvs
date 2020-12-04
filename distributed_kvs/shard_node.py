@@ -41,6 +41,8 @@ class ShardNodeWrapper(object):
                 rule='/kvs/keys/<string:key>', endpoint='keys', view_func=self.keys, methods=['GET', 'PUT', 'DELETE'])
         self.app.add_url_rule(
                 rule='/kvs/shards', endpoint='shards', view_func=self.shards, methods=['GET'])
+        self.app.add_url_rule(
+                rule='/kvs/shards/<string:shard_id>', endpoint='shard_id', view_func=self.handle_shard_id, methods=['GET'])
 
         """
             Proxy Routes
@@ -151,6 +153,49 @@ class ShardNodeWrapper(object):
 
         return jsonify(response), code
 
+    def handle_shard_id(self, shard_id):
+        """
+        function used to handle the shard id REST API request
+        """
+        response = {}
+
+        # 1. check if shard_id is our shard_id
+        if shard_id == self.shard_id:
+            response['message'] = 'Shard information retrieved successfully'
+            response['shard_id'] = self.shard_id
+            response['key-count'] = len(self.kv_store)
+            response['replicas'] = self.replicas
+            code = 200
+
+            return jsonify(response), code
+
+        # 2. get list of replicas pertaining to shard_id
+        replicas = self.all_partitions[shard_id]
+
+        # 3. Should query nodes in replicas list to get a response
+        #    of their key-count
+        for node_address in replicas:
+            # send a /kvs/key-count request
+            url = os.path.join('http://', node_address, 'kvs/key-count')
+
+            try:
+                resp = requests.get(url, timeout=myconstants.TIMEOUT)
+
+                # if we get a response
+                json_resp = json.loads(resp.text)
+                key_count = json_resp['key-count']
+                response['message'] = 'Shard information retrieved successfully'
+                response['shard_id'] = shard_id
+                response['key-count'] = key_count
+                response['replicas'] = replicas
+                code = 200
+
+                return jsonify(response), code
+            except:
+                print('Error: cannot contact shard node')
+
+        # TODO: Maybe handle the case that all nodes in shard_id are down?
+        #       however, TA said this will not occur
 
     def view_change(self):
         """
