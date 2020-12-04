@@ -83,6 +83,12 @@ class ShardNodeWrapper(object):
                 replica_partitions[partition] = []
                 replica_partitions[partition].append(self.view[i])
 
+        for key in replica_partitions:
+            value = replica_partitions[key]
+            if self.address in value:
+                self.replicas = {}
+                self.replicas[key] = value
+
 
     def setup_address(self):
         """
