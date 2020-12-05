@@ -18,6 +18,7 @@ class ShardNodeWrapper(object):
     def __init__(self, ip, port, view, repl_factor):
         self.app = Flask(__name__)                  # The Flask Server (Node)
         self.kv_store = {}                          # The local key-value store
+        self.kv_store['sampleKey'] = 'sampleValue'
         self.view = view.split(',')                 # The view, IP and PORT address of other nodes
         self.ip = ip
         self.port = port
@@ -482,9 +483,6 @@ class ShardNodeWrapper(object):
             """
 
             try:
-                # data = request.data
-                # content = json.loads(data)
-
                 content = request.get_json()
             except:
                 # Error: Invalid Json format
@@ -494,19 +492,32 @@ class ShardNodeWrapper(object):
                 value = content['value']
             except:
                 # Error: Key value did not exist
-                return jsonify(myconstants.MISSING_RESPONSE), 400
+                response['message'] = 'Error in PUT'
+                response['error'] = 'Value is missing'
+                response['causal-context'] = context
+                code = 400
+                return jsonify(response), code
 
             if len(key) > myconstants.KEY_LENGTH:
-                return jsonify(myconstants.LONG_KEY_RESPONSE), 400
+                response['message'] = 'Error in PUT'
+                response['error'] = 'Key is too long'
+                response['causal-context'] = context
+                response['address'] = self.address
+                code = 400
+                return jsonify(response), code
 
 
             if key in self.kv_store:
+
                 self.kv_store[key] = content['value']
                 message = myconstants.UPDATED_MESSAGE
                 code = 200
 
                 response['replaced'] = True
                 response['message'] = message
+                response['causal-context'] = context
+
+                return jsonify(response), code
             else:
 
                 proxy_path = 'proxy/kvs/keys'
