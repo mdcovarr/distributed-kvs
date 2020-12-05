@@ -404,6 +404,9 @@ class ShardNodeWrapper(object):
         :return status: the response of the given HTTP request
         """
         response = {}
+        contents = request.get_json()
+        context = contents['causal-context']
+        resp = None
 
         """
             GET requests handling
@@ -413,48 +416,56 @@ class ShardNodeWrapper(object):
                 response['doesExist'] = True
                 response['message'] = myconstants.RETRIEVED_MESSAGE
                 response['value'] = self.kv_store[key]
+                response['causal-context'] = context
                 code = 200
+
+                return jsonify(response), code
             else:
                 """
-                    Need to ask other nodes if they have the key
+                    Need to ask other nodes of each shard
+                    NOTE: need to make sure we communicate with at least
+                          one node for each shard
                 """
                 proxy_path = 'proxy/kvs/keys'
 
-                for node_address in self.view:
-                    # don't execute loop if node_address is address of current shard node
-                    if node_address == self.address:
+                for shard_id in self.all_partitions:
+                    # don't execute loop if shard_id is of this node
+                    if shard_id == self.shard_id:
                         continue
 
-                    url = os.path.join('http://', node_address, proxy_path, key)
+                    partition = self.all_partitions[shard_id]
 
-                    try:
-                        resp = requests.get(url, timeout=myconstants.TIMEOUT)
-                        resp_dict = json.loads(resp.text)
+                    for node_address in partition:
+                        url = os.path.join('http://', node_address, proxy_path, key)
 
-                        if resp_dict['doesExist'] == True:
+                        try:
+                            resp = requests.get(url, json=contents, timeout=myconstants.TIMEOUT)
+                            resp_dict = json.loads(resp.text)
+
+                            if resp_dict['doesExist'] == True:
+                                """
+                                    We found the key on another Shard Node
+                                    now forward response back to client
+                                """
+                                return resp.text, resp.status_code
+                            else:
+                                """
+                                    We were able to contact a node for a given shard
+                                    so no need to contact other nodes for the same shard
+                                    replica. Thus we can break from loop
+                                """
+                                break
+                        except (requests.Timeout, requests.exceptions.ConnectionError):
                             """
-                                We found the key on another Shard Node
-                                now forward response back to client
+                                We were not able to connect to another node, maybe node is
+                                down? Thus continue to try and contact other nodes for a
+                                certain shard
                             """
-                            return resp.text, resp.status_code
+                            continue
 
-                    except (requests.Timeout, requests.exceptions.ConnectionError):
-                        # Shard Node we are forwarding to was down
-
-                        error = 'Main instance is down'
-                        message = 'Error in PUT'
-                        status_code = 503
-                        res_dict = {'error': error, 'message': message}
-
-                        return jsonify(res_dict), status_code
-
-
-                response['doesExist'] = False
-                response['error'] = myconstants.KEY_ERROR
-                response['message'] = myconstants.GET_ERROR_MESSAGE
-                code = 404
-
-            return jsonify(response), code
+            # At this point we did not find a shard with the given key,
+            # so just return the response from the last node we contacted
+            return resp.text, resp.status_code
 
         """
             PUT requests handling
@@ -641,6 +652,8 @@ class ShardNodeWrapper(object):
         proxy_keys just returns whether it finds its key in it's local storage or not
         """
         response = {}
+        contents = request.get_json()
+        context = contents['causal-context']
 
         """
             GET requests handling forward from another shard node
@@ -651,11 +664,14 @@ class ShardNodeWrapper(object):
                 response['message'] = myconstants.RETRIEVED_MESSAGE
                 response['value'] = self.kv_store[key]
                 response['address'] = self.address
+                response['causal-context'] = context
                 code = 200
             else:
                 response['doesExist'] = False
                 response['error'] = myconstants.KEY_ERROR
                 response['message'] = myconstants.GET_ERROR_MESSAGE
+                response['address'] = self.address
+                response['causal-context'] = context
                 code = 404
 
             return jsonify(response), code
