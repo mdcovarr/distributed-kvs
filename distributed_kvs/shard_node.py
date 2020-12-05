@@ -18,7 +18,6 @@ class ShardNodeWrapper(object):
     def __init__(self, ip, port, view, repl_factor):
         self.app = Flask(__name__)                  # The Flask Server (Node)
         self.kv_store = {}                          # The local key-value store
-        self.kv_store['sampleKey'] = 'sampleValue'
         self.view = view.split(',')                 # The view, IP and PORT address of other nodes
         self.ip = ip
         self.port = port
@@ -519,39 +518,37 @@ class ShardNodeWrapper(object):
 
                 return jsonify(response), code
             else:
-
                 proxy_path = 'proxy/kvs/keys'
 
-                for node_address in self.view:
-                    # don't execute loop if node_address is address of current shard node
-                    if node_address == self.address:
+                for shard_id in self.all_partitions:
+                    if shard_id == self.shard_id:
                         continue
 
-                    url = os.path.join('http://', node_address, proxy_path, key)
+                    for node_address in self.all_partitions[shard_id]:
+                        url = os.path.join('http://', node_address, proxy_path, key)
 
-                    try:
-                        resp = requests.get(url, timeout=myconstants.TIMEOUT)
-                        resp_dict = json.loads(resp.text)
+                        try:
+                            resp = requests.get(url, timeout=myconstants.TIMEOUT)
+                            resp_dict = json.loads(resp.text)
 
-                        if resp_dict['doesExist'] == True:
-                            """
-                                We found the key on another Shard Node
-                                now forward response back to client
-                            """
-                            resp = requests.put(url, json=content, timeout=myconstants.TIMEOUT)
+                            if resp_dict['doesExist'] == True:
+                                """
+                                    We found the key on another shard node
+                                    Now need to update key on the determined node
+                                """
+                                resp = requests.put(url, json=contents, timeout=myconstants.TIMEOUT)
+                                return resp.text, resp.status_code
+                            else:
+                                """
+                                    We didn't find the key in this shard, so no need to talk to
+                                    other replicas of same shard
+                                """
+                                break
+                        except (requests.Timeout, requests.exceptions.ConnectionError):
+                            continue
 
-                            return resp.text, resp.status_code
 
-                    except (requests.Timeout, requests.exceptions.ConnectionError):
-                        # Shard Node we are forwarding to was down
-                        error = 'Main instance is down'
-                        message = 'Error in PUT'
-                        status_code = 503
-                        res_dict = {'error': error, 'message': message}
-
-                        return jsonify(res_dict), status_code
-
-                # Not present in any of the other nodes
+                # At this point none of the shards have the given key
                 # Will have to get the key_count from all the nodes to balance the insertion.
                 min_key_count = len(self.kv_store)
                 min_node_address = self.address
@@ -665,6 +662,7 @@ class ShardNodeWrapper(object):
         response = {}
         contents = request.get_json()
         context = contents['causal-context']
+        code = 999
 
         """
             GET requests handling forward from another shard node
@@ -691,10 +689,28 @@ class ShardNodeWrapper(object):
             PUT requests handling forward from another shard node
         """
         if request.method == 'PUT':
+            contents = request.get_json()
+            context = contents['causal-context']
 
-            # We will have a valid value and key as the validation is done in the main node
-            content = request.get_json()
-            value = content['value']
+            try:
+                value = contents['value']
+            except:
+                # Error: Key value did not exist
+                response['message'] = 'Error in PUT'
+                response['error'] = 'Value is missing'
+                response['address'] = self.address
+                response['causal-context'] = context
+                code = 400
+                return jsonify(response), code
+
+            if len(key) > myconstants.KEY_LENGTH:
+                response['message'] = 'Error in PUT'
+                response['error'] = 'Key is too long'
+                response['causal-context'] = context
+                response['address'] = self.address
+                code = 400
+                return jsonify(response), code
+
 
             # at this point we have a valid value and key
             if key in self.kv_store:
@@ -708,6 +724,7 @@ class ShardNodeWrapper(object):
 
             response['replaced'] = replaced
             response['message'] = message
+            response['causal-context'] = context
             response['address'] = self.address
 
             self.kv_store[key] = value
