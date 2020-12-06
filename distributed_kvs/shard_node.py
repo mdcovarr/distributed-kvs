@@ -487,25 +487,6 @@ class ShardNodeWrapper(object):
                 # Error: Invalid Json format
                 return jsonify(myconstants.BAD_FORMAT_RESPONSE), 400
 
-            try:
-                value = content['value']
-            except:
-                # Error: Key value did not exist
-                response['message'] = 'Error in PUT'
-                response['error'] = 'Value is missing'
-                response['causal-context'] = context
-                code = 400
-                return jsonify(response), code
-
-            if len(key) > myconstants.KEY_LENGTH:
-                response['message'] = 'Error in PUT'
-                response['error'] = 'Key is too long'
-                response['causal-context'] = context
-                response['address'] = self.address
-                code = 400
-                return jsonify(response), code
-
-
             if key in self.kv_store:
 
                 self.kv_store[key] = content['value']
@@ -578,8 +559,24 @@ class ShardNodeWrapper(object):
 
 
                 if min_node_address == self.address:
+                    try:
+                        value = content['value']
+                    except:
+                        # Error: Key value did not exist
+                        response['message'] = 'Error in PUT'
+                        response['error'] = 'Value is missing'
+                        response['causal-context'] = context
+                        code = 400
+                        return jsonify(response), code
 
-                    self.kv_store[key] = content['value']
+                    if len(key) > myconstants.KEY_LENGTH:
+                        response['message'] = 'Error in PUT'
+                        response['error'] = 'Key is too long'
+                        response['causal-context'] = context
+                        code = 400
+                        return jsonify(response), code
+
+                    self.kv_store[key] = value
                     response['replaced'] = False
                     response['message'] = myconstants.ADDED_MESSAGE
                     response['causal-context'] = context
