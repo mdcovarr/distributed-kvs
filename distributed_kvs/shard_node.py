@@ -305,7 +305,6 @@ class ShardNodeWrapper(object):
 
         return jsonify(response), code
 
-
     def proxy_view_change(self):
         """
         Method to handle receiving a proxy view change. If a node
