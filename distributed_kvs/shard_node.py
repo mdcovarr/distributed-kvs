@@ -528,7 +528,7 @@ class ShardNodeWrapper(object):
                         url = os.path.join('http://', node_address, proxy_path, key)
 
                         try:
-                            resp = requests.get(url, timeout=myconstants.TIMEOUT)
+                            resp = requests.get(url, json=content, timeout=myconstants.TIMEOUT)
                             resp_dict = json.loads(resp.text)
 
                             if resp_dict['doesExist'] == True:
@@ -554,28 +554,38 @@ class ShardNodeWrapper(object):
                 min_node_address = self.address
 
                 path = 'kvs/key-count'
-                for node_address in self.view:
-                    if node_address == self.address:
+
+                for shard_id in self.all_partitions:
+                    if shard_id == self.shard_id:
                         continue
 
-                    url = os.path.join('http://', node_address, path)
-                    try:
-                        resp = requests.get(url, timeout=myconstants.TIMEOUT)
-                        resp_dict = json.loads(resp.text)
+                    for node_address in self.all_partitions[shard_id]:
+                        url = os.path.join('http://', node_address, path)
 
-                        if min_key_count > resp_dict['key-count']:
-                            min_key_count = resp_dict['key-count']
-                            min_node_address = node_address
+                        try:
+                            resp = requests.get(url, timeout=myconstants.TIMEOUT)
+                            resp_dict = json.loads(resp.text)
 
-                    except Exception:
-                        pass
+                            if min_key_count > resp_dict['key-count']:
+                                min_key_count = resp_dict['key-count']
+                                min_node_address = node_address
+
+                            # we have talked to a node with the given shard thus we can
+                            # move on to a new shard
+                            break
+                        except (requests.Timeout, requests.exceptions.ConnectionError):
+                            continue
+
 
                 if min_node_address == self.address:
 
                     self.kv_store[key] = content['value']
                     response['replaced'] = False
                     response['message'] = myconstants.ADDED_MESSAGE
+                    response['causal-context'] = context
                     code = 201
+
+                    return jsonify(response), code
                 else:
                     try:
                         proxy_path = 'proxy/kvs/keys'
@@ -594,10 +604,6 @@ class ShardNodeWrapper(object):
                         res_dict = {'error': error, 'message': message}
 
                         return jsonify(res_dict), status_code
-
-
-
-            return jsonify(response), code
 
         """
             DELETE requests handling
@@ -698,8 +704,8 @@ class ShardNodeWrapper(object):
                 # Error: Key value did not exist
                 response['message'] = 'Error in PUT'
                 response['error'] = 'Value is missing'
-                response['address'] = self.address
                 response['causal-context'] = context
+                response['address'] = self.address
                 code = 400
                 return jsonify(response), code
 
