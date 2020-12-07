@@ -360,10 +360,33 @@ class ShardNodeWrapper(object):
         except:
             print('Error: unable to get new view key value from json')
 
+        repl_factor = int(contents['repl-factor'])
+        partitions = {}
+        view_list = list(new_view.split(','))
+
+        for i in range(len(view_list)):
+            shard_id = str((i % repl_factor) + 1)
+
+            try:
+                partitions[shard_id].append(view_list[i])
+            except KeyError:
+                partitions[shard_id] = []
+                partitions[shard_id].append(view_list[i])
+
+        # create dictionary for entire all shard_ids -> replicas
+        self.all_partitions = partitions
+
+        # look for shard_id and replicas list for this node
+        for key in partitions:
+            value = partitions[key]
+            if self.address in value:
+                self.replicas = value
+                self.shard_id = str(key)
+
         # at this point we need to perform hashing
         # create id to shard_node dictionary
-        view_list = list(new_view.split(','))
-        hr = HashRing(nodes=view_list)
+        shard_keys = list(self.all_partitions.keys())
+        hr = HashRing(nodes=shard_keys)
         new_dict = {}
 
         """
@@ -374,8 +397,8 @@ class ShardNodeWrapper(object):
         """
             2. Hash keys
         """
-        for key in view_list:
-            new_dict[key] = {}
+        for key in shard_keys:
+            new_dict[str(key)] = {}
 
         for key in self.kv_store:
             new_address = hr.get_node(key)
@@ -388,23 +411,26 @@ class ShardNodeWrapper(object):
         new_kv_store = {}
 
         for key in new_dict:
-            if key == self.address:
+            if self.shard_id == key:
                 new_kv_store = new_dict[key].copy()
 
-        new_dict.pop(self.address, None)
+        new_dict.pop(self.shard_id, None)
         self.kv_store = new_kv_store
 
         """
             4. Now need to send other nodes their new key values
         """
-        for node_address in new_dict:
-            url = os.path.join('http://', node_address, 'proxy/receive-dict')
-            payload = new_dict[node_address]
+        for shard_id in new_dict:
+            replicas = self.all_partitions[shard_id]
 
-            try:
-                resp = requests.put(url, json=json.dumps(payload), timeout=myconstants.TIMEOUT)
-            except:
-                print('TODO: better error handling sending dictionary to another shard node')
+            for node_address in replicas:
+                url = os.path.join('http://', node_address, 'proxy/receive-dict')
+                payload = json.dumps(new_dict[shard_id])
+
+                try:
+                    resp = requests.put(url, json=payload, timeout=myconstants.TIMEOUT)
+                except:
+                    print('TODO: better error handling sending dictionary to another shard node')
 
         return jsonify(response), code
 
