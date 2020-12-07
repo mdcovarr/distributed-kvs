@@ -314,20 +314,27 @@ class ShardNodeWrapper(object):
         response['shards'] = []
         code = 200
 
-        for node_address in self.view:
+        for shard_id in self.all_partitions:
             node_data = {}
 
-            if node_address == self.address:
-                node_data['address'] = self.address
+            if shard_id == self.shard_id:
+                node_data['shard-id'] = shard_id
                 node_data['key-count'] = len(self.kv_store)
+                node_data['replicas'] = self.all_partitions[shard_id]
             else:
-                node_data['address'] = node_address
-                url = os.path.join('http://', node_address, 'kvs/key-count')
+                for node_address in self.all_partitions[shard_id]:
+                    url = os.path.join('http://', node_address, 'kvs/key-count')
 
-                resp = requests.get(url, timeout=myconstants.TIMEOUT)
+                    try:
+                        resp = request.get(url, timeout=myconstants.TIMEOUT)
 
-                json_resp = json.loads(resp.text)
-                node_data['key-count'] = json_resp['key-count']
+                        json_resp = json.loads(resp.text)
+                        node_data['shard-id'] = shard_id
+                        node_data['key-count'] = json_resp['key-count']
+                        node_data['replicas'] = self.all_partitions[shard_id]
+                        break
+                    except (requests.Timeout, requests.exceptions.ConnectionError):
+                        print('Not able to get key count of annother shard')
 
             response['shards'].append(node_data)
 
