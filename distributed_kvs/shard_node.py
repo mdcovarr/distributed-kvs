@@ -49,6 +49,8 @@ class ShardNodeWrapper(object):
             /proxy/kvs/keys/<key>
         """
         self.app.add_url_rule(
+                rule='/proxy/replicate/<string:key>', endpoint='replicate', view_func=self.replicate, methods=['PUT'])
+        self.app.add_url_rule(
                 rule='/proxy/kvs/keys/<string:key>', endpoint='proxy_keys', view_func=self.proxy_keys, methods=['GET', 'PUT', 'DELETE'])
         self.app.add_url_rule(
                 rule='/proxy/view-change', endpoint='proxy_view_change', view_func=self.proxy_view_change, methods=['PUT'])
@@ -813,3 +815,34 @@ class ShardNodeWrapper(object):
                 code = 404
 
             return jsonify(response), code
+
+    def replicate(self, key):
+        """
+        Function used to handle other nodes reveiving a replicated value from
+        another node in the same replica
+        """
+        response = {}
+        code = 999
+        contents = request.get_json()
+        context = contents['causal-context']
+        value = contents['value']
+
+        # at this point we have a valid value and key
+        if key in self.kv_store:
+            replaced = True
+            message = myconstants.UPDATED_MESSAGE
+            code = 200
+        else:
+            replaced = False
+            message = myconstants.ADDED_MESSAGE
+            code = 201
+
+        response['replaced'] = replaced
+        response['message'] = message
+        response['causal-context'] = context
+        response['address'] = self.address
+
+        self.kv_store[key] = value
+
+        return jsonify(response), code
+
