@@ -326,7 +326,7 @@ class ShardNodeWrapper(object):
                     url = os.path.join('http://', node_address, 'kvs/key-count')
 
                     try:
-                        resp = request.get(url, timeout=myconstants.TIMEOUT)
+                        resp = requests.get(url, timeout=myconstants.TIMEOUT)
 
                         json_resp = json.loads(resp.text)
                         node_data['shard-id'] = shard_id
