@@ -555,6 +555,25 @@ class ShardNodeWrapper(object):
                 message = myconstants.UPDATED_MESSAGE
                 code = 200
 
+                """
+                    Gossip
+
+                    Need to tell all other nodes in same replica about the
+                    newly inserted/update value
+                """
+                for node_address in self.all_partitions[self.shard_id]:
+                    if node_address == self.address:
+                        continue
+
+                    url = os.path.join('http://', node_address, 'proxy/replicate', key)
+
+                    try:
+                        resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
+
+                    except (requests.Timeout, requests.exceptions.ConnectionError):
+                        print('we were not able to communicate with another replica')
+
+
                 response['replaced'] = True
                 response['message'] = message
                 response['causal-context'] = context
@@ -639,6 +658,25 @@ class ShardNodeWrapper(object):
                         return jsonify(response), code
 
                     self.kv_store[key] = value
+
+                    """
+                        Gossip
+
+                        Need to tell all other nodes in same replica about the
+                        newly inserted/update value
+                    """
+                    for node_address in self.all_partitions[self.shard_id]:
+                        if node_address == self.address:
+                            continue
+
+                        url = os.path.join('http://', node_address, 'proxy/replicate', key)
+
+                        try:
+                            resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
+
+                        except (requests.Timeout, requests.exceptions.ConnectionError):
+                            print('we were not able to communicate with another replica')
+
                     response['replaced'] = False
                     response['message'] = myconstants.ADDED_MESSAGE
                     response['causal-context'] = context
@@ -788,6 +826,8 @@ class ShardNodeWrapper(object):
                 code = 201
 
             """
+                Gossip
+
                 Need to tell all other nodes in same replica about the
                 newly inserted/update value
             """
@@ -795,7 +835,7 @@ class ShardNodeWrapper(object):
                 if node_address == self.address:
                     continue
 
-                url = os.path.join('http://', node_address, 'proxy/repliacte', key)
+                url = os.path.join('http://', node_address, 'proxy/replicate', key)
 
                 try:
                     resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
