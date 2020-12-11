@@ -29,4 +29,19 @@ LONG_KEY_RESPONSE = {
     "message": "Error in PUT"
 }
 
+GET_UNABLE_TO_SATISFY = {
+    "error": "Unable to satisfy request",
+    "message": "Error in GET"
+}
+
+PUT_UNABLE_TO_SATISFY = {
+    "error": "Unable to satisfy request",
+    "message": "Error in PUT"
+}
+
+DELETE_UNABLE_TO_SATISFY = {
+    "error": "Unable to satisfy request",
+    "message": "Error in DELETE"
+}
+
 TIMEOUT = 5
