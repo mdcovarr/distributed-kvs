@@ -9,6 +9,7 @@ import requests
 import myconstants
 import os
 import sys
+import time
 
 class ShardNodeWrapper(object):
     """
@@ -23,6 +24,7 @@ class ShardNodeWrapper(object):
         self.port = port
         self.address = ''
         self.repl_factor = repl_factor
+        self.causal_context = {}
 
 
     def setup_routes(self):
@@ -340,6 +342,11 @@ class ShardNodeWrapper(object):
 
             response['shards'].append(node_data)
 
+        """
+            7. Reset causal context
+        """
+        self.causal_context = {}
+
         return jsonify(response), code
 
     def proxy_view_change(self):
@@ -433,6 +440,11 @@ class ShardNodeWrapper(object):
                     resp = requests.put(url, json=payload, timeout=myconstants.TIMEOUT)
                 except:
                     print('TODO: better error handling sending dictionary to another shard node')
+
+        """
+            5. Reset causal context
+        """
+        self.causal_context = {}
 
         return jsonify(response), code
 
@@ -903,3 +915,16 @@ class ShardNodeWrapper(object):
 
         return jsonify(response), code
 
+    def handle_causal_context(self, key, value):
+        """
+        Function used to handle the addition of an event to
+        the current causal context
+        :param key: key in API call (e.g. http://127.0.0.1:13800/kvs/keys/<key>)
+        """
+        curr_time = time.time()
+
+        # Add event to causal context
+        try:
+            self.causal_context[key][str(curr_time)] = value
+        except:
+            print('Error: Issue adding to causal context')

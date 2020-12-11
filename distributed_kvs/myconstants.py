@@ -34,11 +34,6 @@ GET_UNABLE_TO_SATISFY = {
     "message": "Error in GET"
 }
 
-PUT_UNABLE_TO_SATISFY = {
-    "error": "Unable to satisfy request",
-    "message": "Error in PUT"
-}
-
 DELETE_UNABLE_TO_SATISFY = {
     "error": "Unable to satisfy request",
     "message": "Error in DELETE"
