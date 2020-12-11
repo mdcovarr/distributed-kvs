@@ -556,7 +556,7 @@ class ShardNodeWrapper(object):
                 code = 200
 
                 """
-                    Gossip
+                    Replicate
 
                     Need to tell all other nodes in same replica about the
                     newly inserted/update value
@@ -660,7 +660,7 @@ class ShardNodeWrapper(object):
                     self.kv_store[key] = value
 
                     """
-                        Gossip
+                        Replicate
 
                         Need to tell all other nodes in same replica about the
                         newly inserted/update value
@@ -826,7 +826,7 @@ class ShardNodeWrapper(object):
                 code = 201
 
             """
-                Gossip
+                Replicate
 
                 Need to tell all other nodes in same replica about the
                 newly inserted/update value
