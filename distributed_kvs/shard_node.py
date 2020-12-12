@@ -562,8 +562,18 @@ class ShardNodeWrapper(object):
                 return jsonify(myconstants.BAD_FORMAT_RESPONSE), 400
 
             if key in self.kv_store:
+                try:
+                    self.kv_store[key] = contents['value']
+                except:
+                    # Error: Key value did not exist
+                    response['message'] = 'Error in PUT'
+                    response['error'] = 'Value is missing'
+                    response['causal-context'] = context
+                    response['address'] = self.address
+                    code = 400
+                    return jsonify(response), code
 
-                self.kv_store[key] = content['value']
+
                 message = myconstants.UPDATED_MESSAGE
                 code = 200
 
