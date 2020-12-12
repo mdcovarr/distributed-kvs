@@ -228,3 +228,104 @@ the client initially sent request to node1. So node1 will respond
                  |                                     |
                  v                                     v
 ```
+
+# Assignment 4
+## Replication
+Do hashing of each node address with the replication factor
+
+Example
+```
+VIEW='10.10.0.2:13800,10.10.0.3:13800,10.10.0.4:13800,10.10.0.5:13800'
+VIEW=['10.10.0.2:13800' ,'10.10.0.3:13800', '10.10.0.4:13800', '10.10.0.5:13800']
+repl-factor = 2
+
+replica = (i % repl_factor) + 1
+
+replicas = {
+  '1': ['10.10.0.2:13800', '10.10.0.4:13800'],
+  '2': ['10.10.0.3:13800', '10.10.0.5:13800']
+}
+
+```
+
+## A node's variables
+```
+  self.kv_store         // key-value store of the node
+  self.view             // View of the current distributed key-value store
+  self.ip               // IP of current node
+  self.port             // PORT of the current node
+  self.address          // IP and PORT of the current node
+  self.repl_factor      // Replication Factor
+  self.causal_context   // Causal context object
+  self.shard_id         // ID of shard the node pertains to
+  self.replicas         // replicas also on the same shard
+  self.partitions       // all shards and their replicas
+
+  --------------------------------------------------------
+
+  Example: Node 1
+
+
+  self.kv_store = {}
+  self.view = ['10.10.0.2:13800' ,'10.10.0.3:13800', '10.10.0.4:13800', '10.10.0.5:13800']
+  self.address = '10.10.0.2:13800'
+  self.repl_factor = 2
+  self.causal_context = {}
+  self.shard_id = 1
+  self.replicas = ['10.10.0.2:13800', '10.10.0.4:13800']
+  self.partitions = {
+      '1': ['10.10.0.2:13800', '10.10.0.4:13800'],
+      '2': ['10.10.0.3:13800', '10.10.0.5:13800']
+  }
+```
+
+# Handle Network Partitions
+```
+self.causal_context = {
+  'key': {
+    'TIMESTAMP': 'VALUE'
+  }
+}
+
+-------------------------
+
+Network Partition
+
+Node 1
+self.causal_context = {
+  'sampleKey': {
+    '1607796868.426495': '10'
+  }
+}
+
+Node 2
+self.causal_context = {
+  'sampleKey': {
+    '1607796904.313417': '20'
+    '1607796904.313419': '3'
+    '1607796904.313420': '100'
+  }
+}
+
+self.causal_context = {
+  'sampleKey': {
+    'timestamp': 'TIMESTAMP',
+    'value': 'VALUE'
+  }
+}
+```
+
+
+# PUT Changes
+```
+Node 1 receives PUT /sampleKey
+
+  1. hash 'sampleKey'
+
+  2. sampleKey hashes to Node 1
+    2a. Now I check if key is too long
+    2b. Check if value existes in JSON
+
+  3. sampleKey didn't have to Node 1 shard, but hashed to Node 3 shard
+    3a. Forward request to Node 3
+```
