@@ -1,0 +1,10 @@
+
+? comment out 4th section in proxy view change (updating replicas of shards in proxy...)
+- what about updating own replicas? (in view change method + proxy view?)
+
+
+- causal context object to be updated in both our and others replicas, in proxy put and delete
+
+
+
+x check all return messages and status codes 
