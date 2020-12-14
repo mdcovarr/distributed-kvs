@@ -59,6 +59,9 @@ class ShardNodeWrapper(object):
         # receive dictionary from other nodes
         self.app.add_url_rule(
                 rule='/proxy/receive-dict', endpoint='proxy_receive_dict', view_func=self.proxy_receive_dict, methods=['PUT'])
+        # used to trigger gossip
+        self.app.add_url_rule(
+                rule='/proxy/node-causal-context', endpoint='get_node_context', view_func=self.node_causal_context, methods=['GET', 'PUT'])
 
 
     def setup_view(self):
@@ -124,7 +127,6 @@ class ShardNodeWrapper(object):
         :return None:
         """
         self.app.run(host=self.ip, port=self.port, debug=True)
-
 
     def key_count(self):
         """
@@ -938,3 +940,106 @@ class ShardNodeWrapper(object):
             self.causal_context[key][str(curr_time)] = value
         except:
             print('Error: Issue adding to causal context')
+
+    def handle_gossip(self):
+        """
+        Function used to get the causal context of other replica nodes in
+        same shard
+        :return None:
+        """
+        # need to check if node is 1st node on list of replicas
+        if self.address != self.replicas[0]:
+            return
+
+        """
+            1. At this point the current node we are on is 1st in replicas list,
+               and thus should trigger gossip
+        """
+        all_context = self.causal_context
+
+
+        for node_address in self.replicas:
+            # We don't need to contact ourselves
+            if self.address == node_address:
+                continue
+
+            url = os.path.join('http://', node_address, 'proxy/node-causal-context')
+
+            try:
+                resp = requests.get(url, timeout=myconstants.TIMEOUT)
+
+            except (requests.Timeout, requests.exceptions.ConnectionError):
+                """
+                    We were not able to contact one of our replicas thus
+                    we should just stop process of gossiping
+                """
+                print('we were not able to communicate with another replica')
+                return
+
+            # Need to extract node's causal context
+            resp_dict = json.loads(resp.text)
+            node_context = resp_dict['causal-context']
+
+            """
+                2. Combine current causal context, with incoming causal context of node
+            """
+            new_context = {**all_context, **node_context}
+
+            for key, value in new_context.items():
+                # Check if key exists in both nodes
+                if key in all_context and key in node_context:
+                    # Check timestamp if both nodes have a certain key value
+                    if float(node_context[key]['timestamp']) > float(value['timestamp']):
+                        new_context[key] = node_context[key]['timestamp']
+
+            all_context = new_context
+
+
+            """
+                3. At this point we have determined the causal context for all the replicas.
+                   Need to distributed to replicas and update our own causal context
+            """
+            for node_address in self.replicas:
+                if self.address == node_address:
+                    continue
+
+                url = os.path.join('http://', node_address, 'proxy/node-causal-context')
+
+                try:
+                    resp = requests.put(url, json=json.dumps(all_context), timeout=myconstants.TIMEOUT)
+                except (requests.Timeout, requests.exceptions.ConnectionError):
+                    print('Error: Was not able to reach node when updating causal context')
+
+            """
+                4. Current Node needs to update it's kv-store and context, based off all_context
+            """
+            self.causal_context = all_context
+
+            for key, value in self.causal_context:
+                self.kv_store[key] = value['value']
+
+    def node_causal_context(self):
+        """
+        Function used to handle GET and PUT requests of Causal Context
+        :return None:
+        """
+        response = {}
+        code = 200
+
+        if request.method == 'GET':
+            response['causal-context'] = self.causal_context
+
+            return jsonify(response), code
+
+        if request.method == 'PUT':
+            try:
+                contents = request.get_json()
+            except:
+                print('Error: Invalid json')
+
+            self.causal_context = contents
+
+            for key, value in self.causal_context:
+                self.kv_store[key] = value['value']
+
+            return jsonify(response), code
