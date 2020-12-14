@@ -1,4 +1,5 @@
 appdirs==1.4.4
+APScheduler==3.6.3
 astroid==2.4.2
 certifi==2020.6.20
 chardet==3.0.4
@@ -14,9 +15,11 @@ lazy-object-proxy==1.4.3
 MarkupSafe==1.1.1
 mccabe==0.6.1
 pylint==2.6.0
+pytz==2020.4
 requests==2.24.0
 six==1.15.0
 toml==0.10.2
+tzlocal==2.1
 uhashring==1.2
 urllib3==1.25.10
 virtualenv==20.0.21
