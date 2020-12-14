@@ -143,7 +143,7 @@ class ShardNodeWrapper(object):
 
         response['message'] = 'Key count retrieved successfully'
         response['key-count'] = count
-        response['shard_id'] = self.shard_id
+        response['shard-id'] = self.shard_id
         code = 200
 
         return jsonify(response), code
@@ -173,7 +173,7 @@ class ShardNodeWrapper(object):
         # 1. check if shard_id is our shard_id
         if shard_id == self.shard_id:
             response['message'] = 'Shard information retrieved successfully'
-            response['shard_id'] = self.shard_id
+            response['shard-id'] = self.shard_id
             response['key-count'] = len(self.kv_store)
             response['replicas'] = self.replicas
             code = 200
@@ -196,7 +196,7 @@ class ShardNodeWrapper(object):
                 json_resp = json.loads(resp.text)
                 key_count = json_resp['key-count']
                 response['message'] = 'Shard information retrieved successfully'
-                response['shard_id'] = shard_id
+                response['shard-id'] = shard_id
                 response['key-count'] = key_count
                 response['replicas'] = replicas
                 code = 200
@@ -205,8 +205,10 @@ class ShardNodeWrapper(object):
             except:
                 print('Error: cannot contact shard node')
 
-        # TODO: Maybe handle the case that all nodes in shard_id are down?
-        #       however, TA said this will not occur
+        # Maybe handle the case that all nodes in shard_id are down?
+        # However, TA said this will not occur
+
+
 
     def view_change(self):
         """
@@ -451,17 +453,17 @@ class ShardNodeWrapper(object):
             4. Now need to send other nodes their new key values
             TODO is this required?
         """
-        for shard_id in new_dict:
-            replicas = self.all_partitions[shard_id]
+        # for shard_id in new_dict:
+        #     replicas = self.all_partitions[shard_id]
 
-            for node_address in replicas:
-                url = os.path.join('http://', node_address, 'proxy/receive-dict')
-                payload = json.dumps(new_dict[shard_id])
+        #     for node_address in replicas:
+        #         url = os.path.join('http://', node_address, 'proxy/receive-dict')
+        #         payload = json.dumps(new_dict[shard_id])
 
-                try:
-                    resp = requests.put(url, json=payload, timeout=myconstants.TIMEOUT)
-                except:
-                    print('TODO: better error handling sending dictionary to another shard node')
+        #         try:
+        #             resp = requests.put(url, json=payload, timeout=myconstants.TIMEOUT)
+        #         except:
+        #             print('TODO: better error handling sending dictionary to another shard node')
 
         """
             5. Reset causal context
@@ -471,9 +473,6 @@ class ShardNodeWrapper(object):
         return jsonify(response), code
 
 
-# VC -> PVC (other shards updated with new view) -> each node checks updated keys 
-# not-my-keys = { s1 : [kvs1]
-#                   s2: [kvs2]}
 
     def proxy_receive_dict(self):
         """
@@ -567,6 +566,23 @@ class ShardNodeWrapper(object):
                             break
                             # TODO throw keyNotFoundError
 
+                            response['message'] = myconstants.GET_ERROR_MESSAGE
+                            response['error'] = myconstants.KEY_ERROR #'Key does not exist'
+                            response['causal-context'] = self.causal_context
+                            response['address'] = self.address # TODO check if required or not
+                            code = 404
+                            return jsonify(response), code
+                            
+                            # {
+                            #     "message"       : "Error in GET",
+                            #     "error"         : "Key does not exist",
+                            #     "doesExist"     : false,
+                            #     "address"       : "10.10.0.4:13800",
+                            #     "causal-context": new-causal-context-object,
+                            # }
+                            # 404
+
+
                     except (requests.Timeout, requests.exceptions.ConnectionError):
                         """
                             We were not able to connect to another node, maybe node is
@@ -575,7 +591,7 @@ class ShardNodeWrapper(object):
                         """
                         continue
                 
-                # TODO handle 503 (timeout errors)        
+                # TODO handle 503 (timeout errors)
 
             # At this point we did not find a shard with the given key,
             # so just return the response from the last node we contacted
