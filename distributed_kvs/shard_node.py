@@ -4,6 +4,7 @@
 
 from flask import Flask, request, jsonify
 from uhashring import HashRing
+from apscheduler.schedulers.background import BackgroundScheduler
 import json
 import requests
 import myconstants
@@ -25,7 +26,11 @@ class ShardNodeWrapper(object):
         self.address = ''
         self.repl_factor = repl_factor
         self.causal_context = {}
+        self.scheduler = BackgroundScheduler()
+        self.job = self.scheduler.add_job(self.trigger_gossip, 'interval', seconds=3)
 
+    def trigger_gossip(self):
+        self.handle_gossip()
 
     def setup_routes(self):
         """
@@ -61,7 +66,9 @@ class ShardNodeWrapper(object):
                 rule='/proxy/receive-dict', endpoint='proxy_receive_dict', view_func=self.proxy_receive_dict, methods=['PUT'])
         # used to trigger gossip
         self.app.add_url_rule(
-                rule='/proxy/node-causal-context', endpoint='get_node_context', view_func=self.node_causal_context, methods=['GET', 'PUT'])
+                rule='/proxy/handle-gossip', endpoint='handle_gossip', view_func=self.handle_gossip, methods=['GET'])
+        self.app.add_url_rule(
+                rule='/proxy/node-causal-context', endpoint='node_causal_context', view_func=self.node_causal_context, methods=['GET', 'PUT'])
 
 
     def setup_view(self):
@@ -119,7 +126,6 @@ class ShardNodeWrapper(object):
             self.address = address
         else:
             self.address = str(self.ip) + ':' + str(self.port)
-
 
     def run(self):
         """
@@ -945,7 +951,6 @@ class ShardNodeWrapper(object):
         """
         Function used to get the causal context of other replica nodes in
         same shard
-        :return None:
         """
         # need to check if node is 1st node on list of replicas
         if self.address != self.replicas[0]:
@@ -968,12 +973,14 @@ class ShardNodeWrapper(object):
             try:
                 resp = requests.get(url, timeout=myconstants.TIMEOUT)
 
-            except (requests.Timeout, requests.exceptions.ConnectionError):
+            #except (requests.Timeout, requests.exceptions.ConnectionError):
+            except Exception as e:
                 """
                     We were not able to contact one of our replicas thus
                     we should just stop process of gossiping
                 """
                 print('we were not able to communicate with another replica')
+                print(e)
                 return
 
             # Need to extract node's causal context
@@ -1006,9 +1013,10 @@ class ShardNodeWrapper(object):
                 url = os.path.join('http://', node_address, 'proxy/node-causal-context')
 
                 try:
-                    resp = requests.put(url, json=json.dumps(all_context), timeout=myconstants.TIMEOUT)
+                    resp = requests.put(url, json=all_context, timeout=myconstants.TIMEOUT)
                 except (requests.Timeout, requests.exceptions.ConnectionError):
                     print('Error: Was not able to reach node when updating causal context')
+                    return
 
             """
                 4. Current Node needs to update it's kv-store and context, based off all_context
@@ -1017,6 +1025,8 @@ class ShardNodeWrapper(object):
 
             for key, value in self.causal_context:
                 self.kv_store[key] = value['value']
+
+        return
 
     def node_causal_context(self):
         """
