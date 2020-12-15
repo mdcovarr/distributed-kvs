@@ -573,21 +573,29 @@ class ShardNodeWrapper(object):
             try:
                 content = request.get_json()
             except:
-                # Error: Invalid Json format
+                # Error: Invalid Json format, which shouldn't happen for this assignment
                 return jsonify(myconstants.BAD_FORMAT_RESPONSE), 400
 
-                    
             correct_shard_id = self.currentHashRing.get_node(key)
-            
 
-
-
+            # key mapped to current shard
             if correct_shard_id == self.shard_id:
-                # if key in self.kv_store:
 
+                # first verify length of key
                 if len(key) > myconstants.KEY_LENGTH:
                     response['message'] = 'Error in PUT'
                     response['error'] = 'Key is too long'
+                    response['causal-context'] = self.causal_context
+                    code = 400
+                    return jsonify(response), code
+
+                # attempt to get value from PUT request
+                try:
+                    value = contents['value']
+                except:
+                    # Error: Key value did not exist
+                    response['message'] = 'Error in PUT'
+                    response['error'] = 'Value is missing'
                     response['causal-context'] = self.causal_context
                     code = 400
                     return jsonify(response), code
@@ -601,42 +609,12 @@ class ShardNodeWrapper(object):
                     code = 201
                     replaced = False
 
-            
-                try:
-                    self.kv_store[key] = contents['value']
-                    
-                except:
-                    # Error: Key value did not exist
-                    response['message'] = 'Error in PUT'
-                    response['error'] = 'Value is missing'
-                    response['causal-context'] = self.causal_context
-                    response['address'] = self.address
-                    code = 400
-                    return jsonify(response), code
-
-
-
+                self.kv_store[key] = value
 
                 """
                     Updating the causal-context object for the current node with the updated value
                 """
-                try:
-                    key_causal_context = self.causal_context[key]
-                    key_causal_context['timestamp'] = time.time()
-                    key_causal_context['value'] = contents['value']
-                    key_causal_context['doesExist'] = True
-                except KeyError:
-                    """
-                        If key does not exist in the causal-context object
-                    """
-                    key_causal_context = {}
-                    key_causal_context['timestamp'] = time.time()
-                    key_causal_context['value'] = contents['value']
-                    key_causal_context['doesExist'] = True
-                
-                self.causal_context[key] = key_causal_context
-
-
+                self.handle_causal_context(key, value)
 
                 """
                     Replicate
@@ -657,7 +635,6 @@ class ShardNodeWrapper(object):
                     except (requests.Timeout, requests.exceptions.ConnectionError):
                         print('we were not able to communicate with another replica')
 
-
                 response['replaced'] = replaced
                 response['message'] = message
                 response['causal-context'] = self.causal_context
@@ -667,37 +644,15 @@ class ShardNodeWrapper(object):
             else:
                 proxy_path = 'proxy/kvs/keys'
 
-                # for shard_id in self.all_partitions:
-                #     if shard_id == self.shard_id:
-                #         continue
-
                 for node_address in self.all_partitions[correct_shard_id]:
                     url = os.path.join('http://', node_address, proxy_path, key)
 
                     try:
                         resp = requests.put(url, json=contents, timeout=myconstants.TIMEOUT)
-                        # return resp.text, resp.status_code
 
-                        # resp = requests.get(url, json=content, timeout=myconstants.TIMEOUT)
-                        # resp_dict = json.loads(resp.text)
-
-                        # if resp_dict['doesExist'] == True:
-                        #     """
-                        #         We found the key on another shard node
-                        #         Now need to update key on the determined node
-                        #     """
-                        #     resp = requests.put(url, json=contents, timeout=myconstants.TIMEOUT)
-                            # return resp.text, resp.status_code
-                        # else:
-                        #     """
-                        #         We didn't find the key in this shard, so no need to talk to
-                        #         other replicas of same shard
-                        #     """
-                        #     break
-
+                        return resp.text, resp.status_code
                     except (requests.Timeout, requests.exceptions.ConnectionError):
                         continue
-                        
 
                 ###### TODO check if need to handle 503 here or not?
                 return resp.text, resp.status_code
@@ -954,7 +909,7 @@ class ShardNodeWrapper(object):
         if request.method == 'PUT':
             contents = request.get_json()
             # context = contents['causal-context']
-            
+
             if len(key) > myconstants.KEY_LENGTH:
                 response['message'] = 'Error in PUT'
                 response['error'] = 'Key is too long'
@@ -962,7 +917,6 @@ class ShardNodeWrapper(object):
                 response['address'] = self.address
                 code = 400
                 return jsonify(response), code
-
 
             if key in self.kv_store:
                 replaced = True
@@ -972,7 +926,6 @@ class ShardNodeWrapper(object):
                 replaced = False
                 message = myconstants.ADDED_MESSAGE
                 code = 201
-
 
             try:
                 value = contents['value']
@@ -987,45 +940,32 @@ class ShardNodeWrapper(object):
 
 
             """
+                Update/Insert the Key
+            """
+            self.kv_store[key] = value
+
+            """
                 Updating the causal-context object for the current node with the updated value
             """
-            try:
-                key_causal_context = self.causal_context[key]
-                key_causal_context['timestamp'] = time.time()
-                key_causal_context['value'] = None
-                key_causal_context['doesExist'] = True
-            except KeyError:
-                """
-                    If key does not exist in the causal-context object
-                """
-                key_causal_context = {}
-                key_causal_context['timestamp'] = time.time()
-                key_causal_context['value'] = None
-                key_causal_context['doesExist'] = True
-            
+            self.handle_causal_context(key, value)
 
-            self.causal_context[key] = key_causal_context
+            """
+                Replicate
 
+                Need to tell all other nodes in same replica about the
+                newly inserted/update value
+            """
+            for node_address in self.all_partitions[self.shard_id]:
+                if node_address == self.address:
+                    continue
 
+                url = os.path.join('http://', node_address, 'proxy/replicate', key)
 
-            # """
-            #     Replicate
+                try:
+                    resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
 
-            #     Need to tell all other nodes in same replica about the
-            #     newly inserted/update value
-            # """
-            # for node_address in self.all_partitions[self.shard_id]:
-            #     if node_address == self.address:
-            #         continue
-
-            #     url = os.path.join('http://', node_address, 'proxy/replicate', key)
-
-            #     try:
-            #         resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
-
-            #     except (requests.Timeout, requests.exceptions.ConnectionError):
-            #         print('we were not able to communicate with another replica')
-
+                except (requests.Timeout, requests.exceptions.ConnectionError):
+                    print('we were not able to communicate with another replica')
 
             # Respond back to client
             response['replaced'] = replaced
@@ -1033,14 +973,7 @@ class ShardNodeWrapper(object):
             response['causal-context'] = self.causal_context
             response['address'] = self.address
 
-
-            self.kv_store[key] = value
-
-
             return jsonify(response), code
-
-
-
         """
             DELETE requests handling forward from another shard node
         """
@@ -1150,10 +1083,11 @@ class ShardNodeWrapper(object):
         the current causal context
         :param key: key in API call (e.g. http://127.0.0.1:13800/kvs/keys/<key>)
         """
-        curr_time = time.time()
-
         # Add event to causal context
         try:
-            self.causal_context[key][str(curr_time)] = value
+            self.causal_context[key] = {}
+            self.causal_context[key]['timestamp'] = str(time.time())
+            self.causal_context[key]['value'] = value
+            self.causal_context[key]['doesExist'] = True
         except:
             print('Error: Issue adding to causal context')
