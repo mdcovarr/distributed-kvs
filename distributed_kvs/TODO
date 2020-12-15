@@ -1,0 +1,20 @@
+
+? comment out 4th section in proxy view change (updating replicas of shards in proxy...)
+- what about updating own replicas? (in view change method + proxy view?)
+
+
+- causal context object to be updated in both our and others replicas, in proxy put and delete
+
+x handle 503 (timeout errors)
+
+
+x check all return messages and status codes 
+
+
+
+
+
+r = requests.post("http://httpbin.org/post", data=payload.encode('utf-8'))
+
+r = requests.post("http://httpbin.org/post", data=payload.encode('utf-8'),
+                  headers={'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8'})
