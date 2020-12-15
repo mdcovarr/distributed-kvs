@@ -656,99 +656,6 @@ class ShardNodeWrapper(object):
 
                 ###### TODO check if need to handle 503 here or not?
                 return resp.text, resp.status_code
-
-                # At this point none of the shards have the given key
-                # Will have to get the key_count from all the nodes to balance the insertion.
-                # min_key_count = len(self.kv_store)
-                # min_node_address = self.address
-
-                # path = 'kvs/key-count'
-
-                # for shard_id in self.all_partitions:
-                #     if shard_id == self.shard_id:
-                #         continue
-
-                #     for node_address in self.all_partitions[shard_id]:
-                #         url = os.path.join('http://', node_address, path)
-
-                #         try:
-                #             resp = requests.get(url, timeout=myconstants.TIMEOUT)
-                #             resp_dict = json.loads(resp.text)
-
-                #             if min_key_count > resp_dict['key-count']:
-                #                 min_key_count = resp_dict['key-count']
-                #                 min_node_address = node_address
-
-                #             # we have talked to a node with the given shard thus we can
-                #             # move on to a new shard
-                #             break
-                #         except (requests.Timeout, requests.exceptions.ConnectionError):
-                #             continue
-
-
-                # if min_node_address == self.address:
-                #     try:
-                #         value = content['value']
-                #     except:
-                #         # Error: Key value did not exist
-                #         response['message'] = 'Error in PUT'
-                #         response['error'] = 'Value is missing'
-                #         response['causal-context'] = context
-                #         code = 400
-                #         return jsonify(response), code
-
-                #     if len(key) > myconstants.KEY_LENGTH:
-                #         response['message'] = 'Error in PUT'
-                #         response['error'] = 'Key is too long'
-                #         response['causal-context'] = context
-                #         code = 400
-                #         return jsonify(response), code
-
-                #     self.kv_store[key] = value
-
-                    # """
-                    #     Replicate
-
-                    #     Need to tell all other nodes in same replica about the
-                    #     newly inserted/update value
-                    # """
-                    # for node_address in self.all_partitions[self.shard_id]:
-                    #     if node_address == self.address:
-                    #         continue
-
-                    #     url = os.path.join('http://', node_address, 'proxy/replicate', key)
-
-                    #     try:
-                    #         resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
-
-                    #     except (requests.Timeout, requests.exceptions.ConnectionError):
-                    #         print('we were not able to communicate with another replica')
-
-                    # response['replaced'] = False
-                    # response['message'] = myconstants.ADDED_MESSAGE
-                    # response['causal-context'] = context
-                    # code = 201
-
-                    # return jsonify(response), code
-                # else:
-                #     try:
-                #         proxy_path = 'proxy/kvs/keys'
-
-                #         url = os.path.join('http://', min_node_address, proxy_path, key)
-
-                #         resp = requests.put(url, json=content, timeout=myconstants.TIMEOUT)
-
-                #         return resp.text, resp.status_code
-
-                #     except (requests.Timeout, requests.exceptions.ConnectionError):
-                #         # Shard Node we are forwarding to was down
-                #         error = 'Main instance is down'
-                #         message = 'Error in PUT'
-                #         status_code = 503
-                #         res_dict = {'error': error, 'message': message}
-
-                        # return jsonify(res_dict), status_code
-
         """
             DELETE requests handling
         """
@@ -1039,7 +946,7 @@ class ShardNodeWrapper(object):
             PUT requests handling forward from another shard node
         """
         if request.method == 'PUT':
-        # at this point we have a valid value and key
+            # at this point we have a valid value and key
             if key in self.kv_store:
                 replaced = True
                 message = myconstants.UPDATED_MESSAGE
@@ -1057,8 +964,6 @@ class ShardNodeWrapper(object):
             response['address'] = self.address
 
             self.kv_store[key] = value
-
-
         """
             DELETE requests handling forward from another shard node
         """
@@ -1072,10 +977,7 @@ class ShardNodeWrapper(object):
             response['causal-context'] = self.causal_context
             response['address'] = self.address
 
-        
         return jsonify(response), code
-
-
 
     def handle_causal_context(self, key, value):
         """
