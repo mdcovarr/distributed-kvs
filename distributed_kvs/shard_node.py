@@ -1075,7 +1075,7 @@ class ShardNodeWrapper(object):
                     # Check timestamp if both nodes have a certain key value
                     if float(node_context[key]['timestamp']) > float(value['timestamp']):
                         new_context[key] = node_context[key]['timestamp']
-            #             TODO Handle delete
+                        #  TODO Handle delete
 
             all_context = new_context
 
@@ -1090,20 +1090,20 @@ class ShardNodeWrapper(object):
 
             url = os.path.join('http://', node_address, 'proxy/node-causal-context')
 
-                try:
-                    resp = requests.put(url, json=all_context, timeout=2)
-                except (requests.Timeout, requests.exceptions.ConnectionError):
-                    print('Error: Was not able to reach node when updating causal context')
-                    return
+            try:
+                resp = requests.put(url, json=all_context, timeout=2)
+            except (requests.Timeout, requests.exceptions.ConnectionError):
+                print('Error: Was not able to reach node when updating causal context')
+                return
 
         """
             4. Current Node needs to update it's kv-store and context, based off all_context
         """
         self.causal_context = all_context
 
-            for key in self.causal_context:
-                curr_obj = self.causal_context[key]
-                self.kv_store[key] = curr_obj['value']
+        for key in self.causal_context:
+            curr_obj = self.causal_context[key]
+            self.kv_store[key] = curr_obj['value']
 
         return
 
