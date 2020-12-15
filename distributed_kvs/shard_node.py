@@ -29,7 +29,7 @@ class ShardNodeWrapper(object):
         self.repl_factor = repl_factor
         self.causal_context = {}
         self.scheduler = BackgroundScheduler()
-        self.job = self.scheduler.add_job(self.trigger_gossip, 'interval', seconds=3)
+        self.job = self.scheduler.add_job(self.trigger_gossip, 'interval', seconds=2)
         self.currentHashRing = None
 
     def trigger_gossip(self):
@@ -229,6 +229,7 @@ class ShardNodeWrapper(object):
         in the distributed key-value store
         :return status: the status of the HTTP PUT request
         """
+        self.job.pause()
         response = {}
 
         # Only accepting PUT requests
@@ -383,6 +384,7 @@ class ShardNodeWrapper(object):
             7. Reset causal context
         """
         self.causal_context = {}
+        self.job.resume()
 
         return jsonify(response), code
 
@@ -393,6 +395,7 @@ class ShardNodeWrapper(object):
         receives a proxy view change, it means that another node was the
         node who received the initial /view-change from the client
         """
+        self.job.pause()
         response = {}
         code = 200
 
@@ -485,6 +488,7 @@ class ShardNodeWrapper(object):
             5. Reset causal context
         """
         self.causal_context = {}
+        self.job.resume()
 
         return jsonify(response), code
 
@@ -662,7 +666,7 @@ class ShardNodeWrapper(object):
                         resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
 
                     except (requests.Timeout, requests.exceptions.ConnectionError):
-                        print('we were not able to communicate with another replica')
+                        print('Error: we were not able to communicate with another replica')
 
                 response['replaced'] = replaced
                 response['message'] = message
@@ -735,7 +739,7 @@ class ShardNodeWrapper(object):
                         resp = requests.delete(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
 
                     except (requests.Timeout, requests.exceptions.ConnectionError):
-                        print('we were not able to communicate with another replica')
+                        print('Error: we were not able to communicate with another replica')
 
 
 
@@ -901,7 +905,7 @@ class ShardNodeWrapper(object):
                     resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
 
                 except (requests.Timeout, requests.exceptions.ConnectionError):
-                    print('we were not able to communicate with another replica')
+                    print('Error: we were not able to communicate with another replica')
 
             # Respond back to client
             response['replaced'] = replaced
@@ -1047,16 +1051,13 @@ class ShardNodeWrapper(object):
             url = os.path.join('http://', node_address, 'proxy/node-causal-context')
 
             try:
-                resp = requests.get(url, timeout=myconstants.TIMEOUT)
+                resp = requests.get(url, timeout=2)
 
-            #except (requests.Timeout, requests.exceptions.ConnectionError):
-            except Exception as e:
+            except (requests.Timeout, requests.exceptions.ConnectionError):
                 """
                     We were not able to contact one of our replicas thus
                     we should just stop process of gossiping
                 """
-                print('we were not able to communicate with another replica')
-                print(e)
                 return
 
             # Need to extract node's causal context
@@ -1089,7 +1090,7 @@ class ShardNodeWrapper(object):
                 url = os.path.join('http://', node_address, 'proxy/node-causal-context')
 
                 try:
-                    resp = requests.put(url, json=all_context, timeout=myconstants.TIMEOUT)
+                    resp = requests.put(url, json=all_context, timeout=2)
                 except (requests.Timeout, requests.exceptions.ConnectionError):
                     print('Error: Was not able to reach node when updating causal context')
                     return
@@ -1099,8 +1100,9 @@ class ShardNodeWrapper(object):
             """
             self.causal_context = all_context
 
-            for key, value in self.causal_context:
-                self.kv_store[key] = value['value']
+            for key in self.causal_context:
+                curr_obj = self.causal_context[key]
+                self.kv_store[key] = curr_obj['value']
 
         return
 
@@ -1125,7 +1127,8 @@ class ShardNodeWrapper(object):
 
             self.causal_context = contents
 
-            for key, value in self.causal_context:
-                self.kv_store[key] = value['value']
+            for key in self.causal_context:
+                curr_obj = self.causal_context[key]
+                self.kv_store[key] = curr_obj['value']
 
             return jsonify(response), code
