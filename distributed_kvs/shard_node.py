@@ -4,6 +4,7 @@
 
 from flask import Flask, request, jsonify
 from uhashring import HashRing
+from apscheduler.schedulers.background import BackgroundScheduler
 import json
 import requests
 import myconstants
@@ -27,8 +28,12 @@ class ShardNodeWrapper(object):
         self.address = ''
         self.repl_factor = repl_factor
         self.causal_context = {}
+        self.scheduler = BackgroundScheduler()
+        self.job = self.scheduler.add_job(self.trigger_gossip, 'interval', seconds=2)
         self.currentHashRing = None
 
+    def trigger_gossip(self):
+        self.handle_gossip()
 
     def setup_routes(self):
         """
@@ -62,6 +67,11 @@ class ShardNodeWrapper(object):
         # receive dictionary from other nodes
         self.app.add_url_rule(
                 rule='/proxy/receive-dict', endpoint='proxy_receive_dict', view_func=self.proxy_receive_dict, methods=['PUT'])
+        # used to trigger gossip
+        self.app.add_url_rule(
+                rule='/proxy/handle-gossip', endpoint='handle_gossip', view_func=self.handle_gossip, methods=['GET'])
+        self.app.add_url_rule(
+                rule='/proxy/node-causal-context', endpoint='node_causal_context', view_func=self.node_causal_context, methods=['GET', 'PUT'])
 
 
     def setup_view(self):
@@ -128,14 +138,12 @@ class ShardNodeWrapper(object):
         else:
             self.address = str(self.ip) + ':' + str(self.port)
 
-
     def run(self):
         """
         Method to start flask server
         :return None:
         """
         self.app.run(host=self.ip, port=self.port, debug=True)
-
 
     def key_count(self):
         """
@@ -221,6 +229,7 @@ class ShardNodeWrapper(object):
         in the distributed key-value store
         :return status: the status of the HTTP PUT request
         """
+        self.job.pause()
         response = {}
 
         # Only accepting PUT requests
@@ -375,6 +384,7 @@ class ShardNodeWrapper(object):
             7. Reset causal context
         """
         self.causal_context = {}
+        self.job.resume()
 
         return jsonify(response), code
 
@@ -385,6 +395,7 @@ class ShardNodeWrapper(object):
         receives a proxy view change, it means that another node was the
         node who received the initial /view-change from the client
         """
+        self.job.pause()
         response = {}
         code = 200
 
@@ -477,6 +488,7 @@ class ShardNodeWrapper(object):
             5. Reset causal context
         """
         self.causal_context = {}
+        self.job.resume()
 
         return jsonify(response), code
 
@@ -510,9 +522,10 @@ class ShardNodeWrapper(object):
         :param key: the key of interest
         :return status: the response of the given HTTP request
         """
+        self.job.pause()
         response = {}
         contents = request.get_json()
-        # context = contents['causal-context']
+        context = contents['causal-context']
 
         resp = None
 
@@ -533,6 +546,8 @@ class ShardNodeWrapper(object):
                     At this point key has been hashed to current node.
                     We still need to determine if key exists
                 """
+                self.combine_causal_contexts(context, self.causal_context)
+
                 if key in self.kv_store:
                     response['doesExist'] = True
                     response['message'] = myconstants.RETRIEVED_MESSAGE
@@ -545,6 +560,7 @@ class ShardNodeWrapper(object):
                     response['error'] = myconstants.KEY_ERROR
                     response['causal-context'] = self.causal_context
 
+                self.job.resume()
                 return jsonify(response), code
             else:
                 """
@@ -575,6 +591,7 @@ class ShardNodeWrapper(object):
 
             # At this point we did not find a shard with the given key,
             # so just return the response from the last node we contacted
+            self.job.resume()
             return resp.text, resp.status_code
 
         """
@@ -595,6 +612,7 @@ class ShardNodeWrapper(object):
                 content = request.get_json()
             except:
                 # Error: Invalid Json format, which shouldn't happen for this assignment
+                self.job.resume()
                 return jsonify(myconstants.BAD_FORMAT_RESPONSE), 400
 
             correct_shard_id = self.currentHashRing.get_node(key)
@@ -608,6 +626,7 @@ class ShardNodeWrapper(object):
                     response['error'] = 'Key is too long'
                     response['causal-context'] = self.causal_context
                     code = 400
+                    self.job.resume()
                     return jsonify(response), code
 
                 # attempt to get value from PUT request
@@ -637,6 +656,8 @@ class ShardNodeWrapper(object):
                 """
                 self.handle_causal_context(key, value)
 
+                self.combine_causal_contexts(context, self.causal_context)
+
                 """
                     Replicate
 
@@ -654,12 +675,13 @@ class ShardNodeWrapper(object):
                         resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
 
                     except (requests.Timeout, requests.exceptions.ConnectionError):
-                        print('we were not able to communicate with another replica')
+                        print('Error: we were not able to communicate with another replica')
 
                 response['replaced'] = replaced
                 response['message'] = message
                 response['causal-context'] = self.causal_context
 
+                self.job.resume()
                 return jsonify(response), code
 
             else:
@@ -671,11 +693,13 @@ class ShardNodeWrapper(object):
                     try:
                         resp = requests.put(url, json=contents, timeout=myconstants.TIMEOUT)
 
+                        self.job.resume()
                         return resp.text, resp.status_code
                     except (requests.Timeout, requests.exceptions.ConnectionError):
                         continue
 
                 ###### TODO check if need to handle 503 here or not?
+                self.job.resume()
                 return resp.text, resp.status_code
         """
             DELETE requests handling
@@ -683,12 +707,12 @@ class ShardNodeWrapper(object):
         if request.method == 'DELETE':
 
             correct_shard_id = self.currentHashRing.get_node(key)
-            
+
             if correct_shard_id == self.shard_id:
             # if key in self.kv_store:
                 # Need to delete key value from store
                 del self.kv_store[key]
-                
+
                 """
                     Updating the causal-context object for the current node with the updated value
                 """
@@ -705,7 +729,7 @@ class ShardNodeWrapper(object):
                     key_causal_context['timestamp'] = time.time()
                     key_causal_context['value'] = None
                     key_causal_context['doesExist'] = False
-                
+
                 self.causal_context[key] = key_causal_context
 
 
@@ -727,7 +751,7 @@ class ShardNodeWrapper(object):
                         resp = requests.delete(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
 
                     except (requests.Timeout, requests.exceptions.ConnectionError):
-                        print('we were not able to communicate with another replica')
+                        print('Error: we were not able to communicate with another replica')
 
 
 
@@ -752,52 +776,11 @@ class ShardNodeWrapper(object):
 
                     except (requests.Timeout, requests.exceptions.ConnectionError):
                         continue
-                        
+
 
                 ###### TODO check if need to handle 503 here or not?
+                self.job.resume()
                 return resp.text, resp.status_code
-
-            # else:
-            #     """
-            #         Need to ask other nodes if they have the key
-            #     """
-            #     proxy_path = 'proxy/kvs/keys'
-
-            #     for node_address in self.view:
-            #         # don't execute loop if node_address is address of current shard node
-            #         if node_address == self.address:
-            #             continue
-
-            #         url = os.path.join('http://', node_address, proxy_path, key)
-
-            #         try:
-            #             resp = requests.delete(url, timeout=myconstants.TIMEOUT)
-            #             resp_dict = json.loads(resp.text)
-
-            #             if resp_dict['doesExist'] == True:
-            #                 """
-            #                     We found the key on another Shard Node
-            #                     now forward response back to client
-            #                 """
-            #                 return resp.text, resp.status_code
-
-
-            #         except (requests.Timeout, requests.exceptions.ConnectionError):
-            #             # Shard Node we are forwarding to was down
-
-            #             error = 'Main instance is down'
-            #             message = 'Error in PUT'
-            #             status_code = 503
-            #             res_dict = {'error': error, 'message': message}
-
-            #             return jsonify(res_dict), status_code
-
-                # response['doesExist'] = False
-                # response['error'] = myconstants.KEY_ERROR
-                # response['message'] = myconstants.DELETE_ERROR_MESSAGE
-                # code = 404
-
-            # return jsonify(response), code
 
 
     def proxy_keys(self, key):
@@ -805,6 +788,7 @@ class ShardNodeWrapper(object):
         Method similar to keys, but instead it does not ask other nodes about a key.
         proxy_keys just returns whether it finds its key in it's local storage or not
         """
+        self.job.pause()
         response = {}
         contents = request.get_json()
         # context = contents['causal-context']
@@ -829,6 +813,7 @@ class ShardNodeWrapper(object):
                 response['causal-context'] = self.causal_context
                 code = 404
 
+            self.job.resume()
             return jsonify(response), code
 
         """
@@ -844,6 +829,7 @@ class ShardNodeWrapper(object):
                 response['causal-context'] = self.causal_context
                 response['address'] = self.address
                 code = 400
+                self.job.resume()
                 return jsonify(response), code
 
             if key in self.kv_store:
@@ -864,6 +850,7 @@ class ShardNodeWrapper(object):
                 response['causal-context'] = self.causal_context
                 response['address'] = self.address
                 code = 400
+                self.job.resume()
                 return jsonify(response), code
 
 
@@ -893,7 +880,7 @@ class ShardNodeWrapper(object):
                     resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
 
                 except (requests.Timeout, requests.exceptions.ConnectionError):
-                    print('we were not able to communicate with another replica')
+                    print('Error: we were not able to communicate with another replica')
 
             # Respond back to client
             response['replaced'] = replaced
@@ -901,6 +888,7 @@ class ShardNodeWrapper(object):
             response['causal-context'] = self.causal_context
             response['address'] = self.address
 
+            self.job.resume()
             return jsonify(response), code
         """
             DELETE requests handling forward from another shard node
@@ -927,7 +915,7 @@ class ShardNodeWrapper(object):
                     key_causal_context['timestamp'] = time.time()
                     key_causal_context['value'] = None
                     key_causal_context['doesExist'] = False
-                
+
 
                 self.causal_context[key] = key_causal_context
 
@@ -948,6 +936,7 @@ class ShardNodeWrapper(object):
                 code = 404
 
 
+            self.job.resume()
             return jsonify(response), code
 
 
@@ -957,6 +946,7 @@ class ShardNodeWrapper(object):
         Function used to handle other nodes receiving a replicated value from
         another node in the same replica
         """
+        self.job.pause()
         response = {}
         code = 999
         contents = request.get_json()
@@ -998,6 +988,7 @@ class ShardNodeWrapper(object):
             response['causal-context'] = self.causal_context
             response['address'] = self.address
 
+        self.job.resume()
         return jsonify(response), code
 
     def handle_causal_context(self, key, value):
@@ -1014,3 +1005,133 @@ class ShardNodeWrapper(object):
             self.causal_context[key]['doesExist'] = True
         except:
             print('Error: Issue adding to causal context')
+
+    def handle_gossip(self):
+        """
+        Function used to get the causal context of other replica nodes in
+        same shard
+        """
+        # need to check if node is 1st node on list of replicas
+        if self.address != self.replicas[0]:
+            return
+
+        """
+            1. At this point the current node we are on is 1st in replicas list,
+               and thus should trigger gossip
+        """
+        all_context = self.causal_context
+
+
+        for node_address in self.replicas:
+            # We don't need to contact ourselves
+            if self.address == node_address:
+                continue
+
+            url = os.path.join('http://', node_address, 'proxy/node-causal-context')
+
+            try:
+                resp = requests.get(url, timeout=2)
+
+            except (requests.Timeout, requests.exceptions.ConnectionError):
+                """
+                    We were not able to contact one of our replicas thus
+                    we should just stop process of gossiping
+                """
+                return
+
+            # Need to extract node's causal context
+            resp_dict = json.loads(resp.text)
+            node_context = resp_dict['causal-context']
+
+            """
+                2. Combine current causal context, with incoming causal context of node
+            """
+            new_context = {**all_context, **node_context}
+
+            for key, value in new_context.items():
+                # Check if key exists in both nodes
+                if key in all_context and key in node_context:
+                    # Check timestamp if both nodes have a certain key value
+                    if float(node_context[key]['timestamp']) > float(value['timestamp']):
+                        new_context[key] = node_context[key]['timestamp']
+                        #  TODO Handle delete
+
+            all_context = new_context
+
+
+        """
+            3. At this point we have determined the causal context for all the replicas.
+               Need to distributed to replicas and update our own causal context
+        """
+        for node_address in self.replicas:
+            if self.address == node_address:
+                continue
+
+            url = os.path.join('http://', node_address, 'proxy/node-causal-context')
+
+            try:
+                resp = requests.put(url, json=all_context, timeout=2)
+            except (requests.Timeout, requests.exceptions.ConnectionError):
+                print('Error: Was not able to reach node when updating causal context')
+                return
+
+        """
+            4. Current Node needs to update it's kv-store and context, based off all_context
+        """
+        self.causal_context = all_context
+
+        for key in self.causal_context:
+            curr_obj = self.causal_context[key]
+            self.kv_store[key] = curr_obj['value']
+
+        return
+
+    def node_causal_context(self):
+        """
+        Function used to handle GET and PUT requests of Causal Context
+        :return None:
+        """
+        response = {}
+        code = 200
+
+        if request.method == 'GET':
+            response['causal-context'] = self.causal_context
+
+            return jsonify(response), code
+
+        if request.method == 'PUT':
+            try:
+                contents = request.get_json()
+            except:
+                print('Error: Invalid json')
+
+            self.causal_context = contents
+
+            for key in self.causal_context:
+                curr_obj = self.causal_context[key]
+                self.kv_store[key] = curr_obj['value']
+
+            return jsonify(response), code
+
+    def combine_causal_contexts(self, curr_context, clients_context):
+        """
+        Function used to combine the client's causal context with the current nodes
+        causal context
+        """
+        new_context = {**curr_context, **clients_context}
+
+        for key, value in new_context.items():
+            # Check if key exists in both nodes
+            if key in curr_context and key in clients_context:
+                # Check timestamp if both nodes have a certain key value
+                if float(clients_context[key]['timestamp']) > float(value['timestamp']):
+                    new_context[key] = clients_context[key]['timestamp']
+                    #  TODO Handle delete
+
+        # Should update key_value store to reflect new_context
+        for key in new_context:
+            curr_obj = new_context[key]
+            self.kv_store[key] = curr_obj['value']
+
+        # update causal context
+        self.causal_context = new_context

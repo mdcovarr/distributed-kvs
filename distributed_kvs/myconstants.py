@@ -29,4 +29,4 @@ LONG_KEY_RESPONSE = {
     "message": "Error in PUT"
 }
 
-TIMEOUT = 6
+TIMEOUT = 3
