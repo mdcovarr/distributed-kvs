@@ -1075,7 +1075,7 @@ class ShardNodeWrapper(object):
                     # Check timestamp if both nodes have a certain key value
                     if float(node_context[key]['timestamp']) > float(value['timestamp']):
                         new_context[key] = node_context[key]['timestamp']
-            #             TODO Handle delete
+                        #  TODO Handle delete
 
             all_context = new_context
 
