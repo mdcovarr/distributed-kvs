@@ -674,12 +674,12 @@ class ShardNodeWrapper(object):
         if request.method == 'DELETE':
 
             correct_shard_id = self.currentHashRing.get_node(key)
-            
+
             if correct_shard_id == self.shard_id:
             # if key in self.kv_store:
                 # Need to delete key value from store
                 del self.kv_store[key]
-                
+
                 """
                     Updating the causal-context object for the current node with the updated value
                 """
@@ -696,7 +696,7 @@ class ShardNodeWrapper(object):
                     key_causal_context['timestamp'] = time.time()
                     key_causal_context['value'] = None
                     key_causal_context['doesExist'] = False
-                
+
                 self.causal_context[key] = key_causal_context
 
 
@@ -743,7 +743,7 @@ class ShardNodeWrapper(object):
 
                     except (requests.Timeout, requests.exceptions.ConnectionError):
                         continue
-                        
+
 
                 ###### TODO check if need to handle 503 here or not?
                 return resp.text, resp.status_code
@@ -918,7 +918,7 @@ class ShardNodeWrapper(object):
                     key_causal_context['timestamp'] = time.time()
                     key_causal_context['value'] = None
                     key_causal_context['doesExist'] = False
-                
+
 
                 self.causal_context[key] = key_causal_context
 

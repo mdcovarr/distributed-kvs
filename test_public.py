@@ -114,11 +114,7 @@ def disconnectFromNetwork(subnetName, instanceName):
 
 ################################# Unit Test Class ############################################################
 
-<<<<<<< HEAD
 extra_credit = True # this feature is WIP
-=======
-extra_credit = False # this feature is WIP
->>>>>>> main
 print_response = False
 
 class TestHW3(unittest.TestCase):
