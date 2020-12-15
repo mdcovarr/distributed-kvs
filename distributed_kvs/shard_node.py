@@ -74,9 +74,6 @@ class ShardNodeWrapper(object):
         try:
             # This is for deployment environment
             self.view = view_string.split(',')
-            nodes = list(self.view)
-            self.currentHashRing = HashRing(nodes=nodes)
-
         except AttributeError:
             # this is for development environment
             pass
@@ -88,19 +85,17 @@ class ShardNodeWrapper(object):
         :return None:
         """
         replica_partitions = {}
+        replica_count = len(self.view)
 
-        for i in range(len(self.view)):
-            partition = (i % self.repl_factor) + 1
-            partition_str = str(partition)
-
-            try:
-                replica_partitions[partition_str].append(self.view[i])
-            except KeyError:
-                replica_partitions[partition_str] = []
-                replica_partitions[partition_str].append(self.view[i])
+        for i in range(0, len(self.view), replica_count):
+            replica_partitions[str(i + 1)] = self.view[i : i + replica_count]
 
         # create dictionary for entire all shard_ids -> replicas
         self.all_partitions = replica_partitions
+
+        # get list of shard_id's for current_hash_ring
+        shards = list(self.all_partitions.keys())
+        self.currentHashRing = HashRing(nodes=shards)
 
         # look for shard_id and replicas list for this node
         for key in replica_partitions:
@@ -236,17 +231,14 @@ class ShardNodeWrapper(object):
         partitions = {}
 
         view_list = list(new_view.split(','))
-        self.currentHashRing = HashRing(nodes=view_list)
+        replica_count = int(len(view_list) / repl_factor)
 
+        for i in range(0, len(view_list), replica_count):
+            partitions[str(i + 1)] = view_list[i : i + replica_count]
 
-        for i in range(len(view_list)):
-            shard_id = str((i % repl_factor) + 1)
-
-            try:
-                partitions[shard_id].append(view_list[i])
-            except KeyError:
-                partitions[shard_id] = []
-                partitions[shard_id].append(view_list[i])
+        # get shard_id's for current hash ring
+        shards = list(partitions.keys())
+        self.currentHashRing = HashRing(nodes=shards)
 
         # create dictionary for entire all shard_ids -> replicas
         self.all_partitions = partitions
@@ -391,15 +383,10 @@ class ShardNodeWrapper(object):
         repl_factor = int(contents['repl-factor'])
         partitions = {}
         view_list = list(new_view.split(','))
+        replication_count = int(len(view_list) / repl_factor)
 
-        for i in range(len(view_list)):
-            shard_id = str((i % repl_factor) + 1)
-
-            try:
-                partitions[shard_id].append(view_list[i])
-            except KeyError:
-                partitions[shard_id] = []
-                partitions[shard_id].append(view_list[i])
+        for i in range(0, len(view_list), replication_count):
+            partitions[str(i + 1)] = view_list[i : i + replication_count]
 
         # create dictionary for entire all shard_ids -> replicas
         self.all_partitions = partitions
@@ -414,7 +401,7 @@ class ShardNodeWrapper(object):
         # at this point we need to perform hashing
         # create id to shard_node dictionary
         shard_keys = list(self.all_partitions.keys())
-        
+
         # hr = HashRing(nodes=shard_keys)
         self.currentHashRing = HashRing(nodes=shard_keys)
 
@@ -519,7 +506,7 @@ class ShardNodeWrapper(object):
 
             # get shard of key
             correct_shard_id = self.currentHashRing.get_node(key)
-            
+
             if correct_shard_id == self.shard_id:
             # if key in self.kv_store:
                 response['doesExist'] = True
