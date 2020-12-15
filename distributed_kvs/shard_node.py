@@ -1075,19 +1075,20 @@ class ShardNodeWrapper(object):
                     # Check timestamp if both nodes have a certain key value
                     if float(node_context[key]['timestamp']) > float(value['timestamp']):
                         new_context[key] = node_context[key]['timestamp']
+            #             TODO Handle delete
 
             all_context = new_context
 
 
-            """
-                3. At this point we have determined the causal context for all the replicas.
-                   Need to distributed to replicas and update our own causal context
-            """
-            for node_address in self.replicas:
-                if self.address == node_address:
-                    continue
+        """
+            3. At this point we have determined the causal context for all the replicas.
+               Need to distributed to replicas and update our own causal context
+        """
+        for node_address in self.replicas:
+            if self.address == node_address:
+                continue
 
-                url = os.path.join('http://', node_address, 'proxy/node-causal-context')
+            url = os.path.join('http://', node_address, 'proxy/node-causal-context')
 
                 try:
                     resp = requests.put(url, json=all_context, timeout=2)
@@ -1095,10 +1096,10 @@ class ShardNodeWrapper(object):
                     print('Error: Was not able to reach node when updating causal context')
                     return
 
-            """
-                4. Current Node needs to update it's kv-store and context, based off all_context
-            """
-            self.causal_context = all_context
+        """
+            4. Current Node needs to update it's kv-store and context, based off all_context
+        """
+        self.causal_context = all_context
 
             for key in self.causal_context:
                 curr_obj = self.causal_context[key]
