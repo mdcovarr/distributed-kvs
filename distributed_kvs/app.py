@@ -41,6 +41,7 @@ if __name__ == '__main__':
     app.setup_routes()
     app.setup_address()
     app.setup_view()
+    app.setup_repl_factor()
     app.setup_pototetial_replicas()
     app.scheduler.start()
     app.run()
