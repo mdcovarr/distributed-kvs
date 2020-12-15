@@ -283,8 +283,8 @@ class ShardNodeWrapper(object):
             new_dict[str(key)] = {}
 
         for key in self.kv_store:
-            new_address = self.currentHashRing.get_node(key)
-            new_dict[new_address][key] = self.kv_store[key]
+            new_shard = self.currentHashRing.get_node(key)
+            new_dict[new_shard][key] = self.kv_store[key]
 
         """
             3. Update VIEW
@@ -307,6 +307,7 @@ class ShardNodeWrapper(object):
         """
             5. Now need to send other nodes their new key values
             TODO: what about updating own replicas?
+            NOTE: I think they would have determined which nodes to keep on their own
         """
         for shard_id in new_dict:
             replicas = self.all_partitions[shard_id]
@@ -357,7 +358,6 @@ class ShardNodeWrapper(object):
         self.causal_context = {}
 
         return jsonify(response), code
-
 
 
     def proxy_view_change(self):
@@ -419,9 +419,8 @@ class ShardNodeWrapper(object):
             new_dict[str(key)] = {}
 
         for key in self.kv_store:
-            # new_address = hr.get_node(key)
-            new_address = self.currentHashRing.get_node(key)
-            new_dict[new_address][key] = self.kv_store[key]
+            new_shard = self.currentHashRing.get_node(key)
+            new_dict[new_shard][key] = self.kv_store[key]
 
         """
             3. Now need to determine which keys will stay
@@ -437,20 +436,19 @@ class ShardNodeWrapper(object):
         self.kv_store = new_kv_store
 
         """
-            4. Now need to send other nodes their new key values
-            TODO is this required?
+            4. Now need to send other nodes their new key values.
         """
-        # for shard_id in new_dict:
-        #     replicas = self.all_partitions[shard_id]
+        for shard_id in new_dict:
+            replicas = self.all_partitions[shard_id]
 
-        #     for node_address in replicas:
-        #         url = os.path.join('http://', node_address, 'proxy/receive-dict')
-        #         payload = json.dumps(new_dict[shard_id])
+            for node_address in replicas:
+                url = os.path.join('http://', node_address, 'proxy/receive-dict')
+                payload = json.dumps(new_dict[shard_id])
 
-        #         try:
-        #             resp = requests.put(url, json=payload, timeout=myconstants.TIMEOUT)
-        #         except:
-        #             print('TODO: better error handling sending dictionary to another shard node')
+                try:
+                    resp = requests.put(url, json=payload, timeout=myconstants.TIMEOUT)
+                except:
+                    print('TODO: better error handling sending dictionary to another shard node')
 
         """
             5. Reset causal context
