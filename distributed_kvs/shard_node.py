@@ -533,11 +533,6 @@ class ShardNodeWrapper(object):
                 """
                 proxy_path = 'proxy/kvs/keys'
 
-                # for shard_id in self.all_partitions:
-                    # don't execute loop if shard_id is of this node
-                    # if shard_id == self.shard_id:
-                        # continue
-
                 partition = self.all_partitions[correct_shard_id]
 
                 for node_address in partition:
@@ -545,40 +540,8 @@ class ShardNodeWrapper(object):
 
                     try:
                         resp = requests.get(url, json=contents, timeout=myconstants.TIMEOUT)
-                        resp_dict = json.loads(resp.text)
 
-                        if resp_dict['doesExist'] == True:
-                            """
-                                We found the key on another Shard Node
-                                now forward response back to client
-                            """
-                            return resp.text, resp.status_code
-                        else:
-                            """
-                                We were able to contact a node for a given shard
-                                so no need to contact other nodes for the same shard
-                                replica. Thus we can break from loop
-                            """
-                            break
-                            # TODO throw keyNotFoundError
-
-                            response['message'] = myconstants.GET_ERROR_MESSAGE
-                            response['error'] = myconstants.KEY_ERROR #'Key does not exist'
-                            response['causal-context'] = self.causal_context
-                            response['address'] = self.address # TODO check if required or not
-                            code = 404
-                            return jsonify(response), code
-                            
-                            # {
-                            #     "message"       : "Error in GET",
-                            #     "error"         : "Key does not exist",
-                            #     "doesExist"     : false,
-                            #     "address"       : "10.10.0.4:13800",
-                            #     "causal-context": new-causal-context-object,
-                            # }
-                            # 404
-
-
+                        return resp.text, resp.status_code
                     except (requests.Timeout, requests.exceptions.ConnectionError):
                         """
                             We were not able to connect to another node, maybe node is
@@ -586,7 +549,7 @@ class ShardNodeWrapper(object):
                             certain shard
                         """
                         continue
-                
+
                 # TODO handle 503 (timeout errors)
 
             # At this point we did not find a shard with the given key,
