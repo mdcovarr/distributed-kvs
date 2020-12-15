@@ -85,10 +85,12 @@ class ShardNodeWrapper(object):
         :return None:
         """
         replica_partitions = {}
-        replica_count = len(self.view)
+        replica_count = int(len(self.view) / self.repl_factor)
+        count = 1
 
         for i in range(0, len(self.view), replica_count):
-            replica_partitions[str(i + 1)] = self.view[i : i + replica_count]
+            replica_partitions[str(count)] = self.view[i : i + replica_count]
+            count += 1
 
         # create dictionary for entire all shard_ids -> replicas
         self.all_partitions = replica_partitions
@@ -232,9 +234,11 @@ class ShardNodeWrapper(object):
 
         view_list = list(new_view.split(','))
         replica_count = int(len(view_list) / repl_factor)
+        count = 1
 
         for i in range(0, len(view_list), replica_count):
-            partitions[str(i + 1)] = view_list[i : i + replica_count]
+            partitions[str(count)] = view_list[i : i + replica_count]
+            count += 1
 
         # get shard_id's for current hash ring
         shards = list(partitions.keys())
@@ -384,9 +388,11 @@ class ShardNodeWrapper(object):
         partitions = {}
         view_list = list(new_view.split(','))
         replication_count = int(len(view_list) / repl_factor)
+        count = 1
 
         for i in range(0, len(view_list), replication_count):
-            partitions[str(i + 1)] = view_list[i : i + replication_count]
+            partitions[str(count)] = view_list[i : i + replication_count]
+            count += 1
 
         # create dictionary for entire all shard_ids -> replicas
         self.all_partitions = partitions
