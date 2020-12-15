@@ -233,11 +233,10 @@ class ShardNodeWrapper(object):
         partitions = {}
 
         view_list = list(new_view.split(','))
-        replica_count = int(len(view_list) / repl_factor)
         count = 1
 
-        for i in range(0, len(view_list), replica_count):
-            partitions[str(count)] = view_list[i : i + replica_count]
+        for i in range(0, len(view_list), repl_factor):
+            partitions[str(count)] = view_list[i : i + repl_factor]
             count += 1
 
         # get shard_id's for current hash ring
@@ -268,7 +267,12 @@ class ShardNodeWrapper(object):
         """
             1. Tell all other nodes in old view to re hash keys
         """
-        for node_address in self.view:
+        all_nodes = self.view
+        all_nodes.extend(view_list)
+        all_nodes = set(all_nodes)
+        all_nodes = list(all_nodes)
+
+        for node_address in all_nodes:
             # do not execute loop if node_address is our own address
             if node_address == self.address:
                 continue
@@ -305,7 +309,7 @@ class ShardNodeWrapper(object):
             if self.shard_id == key:
                 new_kv_store = new_dict[key].copy()
 
-        new_dict.pop(self.shard_id, None)
+        #new_dict.pop(self.shard_id, None)
         self.kv_store = new_kv_store
 
         """
@@ -317,6 +321,9 @@ class ShardNodeWrapper(object):
             replicas = self.all_partitions[shard_id]
 
             for node_address in replicas:
+                if node_address == self.address:
+                    continue
+
                 url = os.path.join('http://', node_address, 'proxy/receive-dict')
                 payload = json.dumps(new_dict[shard_id])
 
@@ -387,11 +394,10 @@ class ShardNodeWrapper(object):
         repl_factor = int(contents['repl-factor'])
         partitions = {}
         view_list = list(new_view.split(','))
-        replication_count = int(len(view_list) / repl_factor)
         count = 1
 
-        for i in range(0, len(view_list), replication_count):
-            partitions[str(count)] = view_list[i : i + replication_count]
+        for i in range(0, len(view_list), repl_factor):
+            partitions[str(count)] = view_list[i : i + repl_factor]
             count += 1
 
         # create dictionary for entire all shard_ids -> replicas
@@ -438,7 +444,7 @@ class ShardNodeWrapper(object):
             if self.shard_id == key:
                 new_kv_store = new_dict[key].copy()
 
-        new_dict.pop(self.shard_id, None)
+        #new_dict.pop(self.shard_id, None)
         self.kv_store = new_kv_store
 
         """
@@ -448,6 +454,9 @@ class ShardNodeWrapper(object):
             replicas = self.all_partitions[shard_id]
 
             for node_address in replicas:
+                if node_address == self.address:
+                    continue
+
                 url = os.path.join('http://', node_address, 'proxy/receive-dict')
                 payload = json.dumps(new_dict[shard_id])
 
