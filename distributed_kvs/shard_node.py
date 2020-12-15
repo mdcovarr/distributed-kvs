@@ -77,6 +77,15 @@ class ShardNodeWrapper(object):
         except AttributeError:
             # this is for development environment
             pass
+    def setup_repl_factor(self):
+        """
+        Function used to set up the replication factor at initiation
+        :return None:
+        """
+        repl_value = os.environ.get('REPL_FACTOR')
+
+        if repl_value:
+            self.repl_factor = int(repl_value)
 
     def setup_pototetial_replicas(self):
         """
@@ -85,11 +94,10 @@ class ShardNodeWrapper(object):
         :return None:
         """
         replica_partitions = {}
-        replica_count = int(len(self.view) / self.repl_factor)
         count = 1
 
-        for i in range(0, len(self.view), replica_count):
-            replica_partitions[str(count)] = self.view[i : i + replica_count]
+        for i in range(0, len(self.view), self.repl_factor):
+            replica_partitions[str(count)] = self.view[i : i + self.repl_factor]
             count += 1
 
         # create dictionary for entire all shard_ids -> replicas
