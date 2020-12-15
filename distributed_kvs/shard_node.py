@@ -508,12 +508,21 @@ class ShardNodeWrapper(object):
             correct_shard_id = self.currentHashRing.get_node(key)
 
             if correct_shard_id == self.shard_id:
-            # if key in self.kv_store:
-                response['doesExist'] = True
-                response['message'] = myconstants.RETRIEVED_MESSAGE
-                response['value'] = self.kv_store[key]
-                response['causal-context'] = self.causal_context
-                code = 200
+                """
+                    At this point key has been hashed to current node.
+                    We still need to determine if key exists
+                """
+                if key in self.kv_store:
+                    response['doesExist'] = True
+                    response['message'] = myconstants.RETRIEVED_MESSAGE
+                    response['value'] = self.kv_store[key]
+                    response['causal-context'] = self.causal_context
+                    code = 200
+                else:
+                    response['doesExist'] = False
+                    response['message'] = myconstants.GET_ERROR_MESSAGE
+                    response['error'] = myconstants.KEY_ERROR
+                    response['causal-context'] = self.causal_context
 
                 return jsonify(response), code
             else:
