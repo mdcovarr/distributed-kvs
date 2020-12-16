@@ -29,12 +29,11 @@ class ShardNodeWrapper(object):
         self.repl_factor = repl_factor
         self.causal_context = {}
         self.scheduler = BackgroundScheduler()
-        self.job = self.scheduler.add_job(self.trigger_gossip, 'interval', seconds=3, id='gossip-job')
+        self.scheduler.add_job(self.trigger_gossip, 'interval', seconds=3, id='gossip-job')
         self.currentHashRing = None
 
     def trigger_gossip(self):
-        #self.handle_gossip()
-        return
+        self.handle_gossip()
 
     def setup_routes(self):
         """
@@ -230,6 +229,9 @@ class ShardNodeWrapper(object):
         in the distributed key-value store
         :return status: the status of the HTTP PUT request
         """
+        self.scheduler.pause_job('gossip-job')
+        self.scheduler.remove_job('gossip-job')
+        self.causal_context = {}
         response = {}
 
         # Only accepting PUT requests
@@ -270,12 +272,6 @@ class ShardNodeWrapper(object):
                 self.replicas = value
                 self.shard_id = str(key)
 
-        # to hold all shard IDs (here keys = python dictionary keys, not kvs keys!)
-        shard_keys = list(self.all_partitions.keys())
-
-        # hr = HashRing(nodes=shard_keys)
-        self.currentHashRing = HashRing(nodes=shard_keys)
-
         new_dict = {}
 
         # at this point we need to perform hashing
@@ -304,7 +300,7 @@ class ShardNodeWrapper(object):
         """
             2. Hash keys
         """
-        for key in shard_keys:
+        for key in shards:
             new_dict[str(key)] = {}
 
         for key in self.kv_store:
@@ -384,6 +380,7 @@ class ShardNodeWrapper(object):
             7. Reset causal context
         """
         self.causal_context = {}
+        self.scheduler.add_job(self.trigger_gossip, 'interval', seconds=3, id='gossip-job')
 
         return jsonify(response), code
 
@@ -394,6 +391,9 @@ class ShardNodeWrapper(object):
         receives a proxy view change, it means that another node was the
         node who received the initial /view-change from the client
         """
+        self.scheduler.pause_job('gossip-job')
+        self.scheduler.remove_job('gossip-job')
+        self.causal_context = {}
         response = {}
         code = 200
 
@@ -486,6 +486,7 @@ class ShardNodeWrapper(object):
             5. Reset causal context
         """
         self.causal_context = {}
+        self.scheduler.add_job(self.trigger_gossip, 'interval', seconds=3, id='gossip-job')
 
         return jsonify(response), code
 
@@ -508,6 +509,7 @@ class ShardNodeWrapper(object):
 
         # Just need to add new keys to store
         self.kv_store = {**self.kv_store, **contents}
+        print('kv store new length: {0}'.format(len(contents.keys())))
 
         return jsonify(response), code
 
@@ -1044,8 +1046,11 @@ class ShardNodeWrapper(object):
                 # Check if key exists in both nodes
                 if key in all_context and key in node_context:
                     # Check timestamp if both nodes have a certain key value
-                    if float(node_context[key]['timestamp']) > float(value['timestamp']):
-                        new_context[key] = node_context[key]['timestamp']
+                    if float(node_context[key]['timestamp']) > float(all_context[key]['timestamp']):
+                        new_context[key] = node_context[key]
+                    else:
+                        new_context[key] = all_context[key]
+
                         #  TODO Handle delete
 
             all_context = new_context
@@ -1116,8 +1121,10 @@ class ShardNodeWrapper(object):
             # Check if key exists in both nodes
             if key in curr_context and key in clients_context:
                 # Check timestamp if both nodes have a certain key value
-                if float(clients_context[key]['timestamp']) > float(value['timestamp']):
-                    new_context[key] = clients_context[key]['timestamp']
+                if float(clients_context[key]['timestamp']) > float(curr_context[key]['timestamp']):
+                    new_context[key] = clients_context[key]
+                else:
+                    new_context[key] = curr_context[key]
                     #  TODO Handle delete
 
         # Should update key_value store to reflect new_context
