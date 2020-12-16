@@ -29,11 +29,12 @@ class ShardNodeWrapper(object):
         self.repl_factor = repl_factor
         self.causal_context = {}
         self.scheduler = BackgroundScheduler()
-        self.job = self.scheduler.add_job(self.trigger_gossip, 'interval', seconds=2)
+        self.job = self.scheduler.add_job(self.trigger_gossip, 'interval', seconds=3, id='gossip-job')
         self.currentHashRing = None
 
     def trigger_gossip(self):
-        self.handle_gossip()
+        #self.handle_gossip()
+        return
 
     def setup_routes(self):
         """
@@ -229,7 +230,6 @@ class ShardNodeWrapper(object):
         in the distributed key-value store
         :return status: the status of the HTTP PUT request
         """
-        self.job.pause()
         response = {}
 
         # Only accepting PUT requests
@@ -384,7 +384,6 @@ class ShardNodeWrapper(object):
             7. Reset causal context
         """
         self.causal_context = {}
-        self.job.resume()
 
         return jsonify(response), code
 
@@ -395,7 +394,6 @@ class ShardNodeWrapper(object):
         receives a proxy view change, it means that another node was the
         node who received the initial /view-change from the client
         """
-        self.job.pause()
         response = {}
         code = 200
 
@@ -488,7 +486,6 @@ class ShardNodeWrapper(object):
             5. Reset causal context
         """
         self.causal_context = {}
-        self.job.resume()
 
         return jsonify(response), code
 
@@ -522,7 +519,6 @@ class ShardNodeWrapper(object):
         :param key: the key of interest
         :return status: the response of the given HTTP request
         """
-        self.job.pause()
         response = {}
         contents = request.get_json()
         context = contents['causal-context']
@@ -559,8 +555,8 @@ class ShardNodeWrapper(object):
                     response['message'] = myconstants.GET_ERROR_MESSAGE
                     response['error'] = myconstants.KEY_ERROR
                     response['causal-context'] = self.causal_context
+                    code = 404
 
-                self.job.resume()
                 return jsonify(response), code
             else:
                 """
@@ -588,10 +584,15 @@ class ShardNodeWrapper(object):
                         continue
 
                 # TODO handle 503 (timeout errors)
+                response['message'] = myconstants.GET_ERROR_MESSAGE
+                response['error'] = myconstants.UNABLE_TO_SERVICE_MESSAGE
+                response['causal-context'] = self.causal_context
+                code = 503
+
+                return jsonify(response), code
 
             # At this point we did not find a shard with the given key,
             # so just return the response from the last node we contacted
-            self.job.resume()
             return resp.text, resp.status_code
 
         """
@@ -612,7 +613,6 @@ class ShardNodeWrapper(object):
                 content = request.get_json()
             except:
                 # Error: Invalid Json format, which shouldn't happen for this assignment
-                self.job.resume()
                 return jsonify(myconstants.BAD_FORMAT_RESPONSE), 400
 
             correct_shard_id = self.currentHashRing.get_node(key)
@@ -626,7 +626,6 @@ class ShardNodeWrapper(object):
                     response['error'] = 'Key is too long'
                     response['causal-context'] = self.causal_context
                     code = 400
-                    self.job.resume()
                     return jsonify(response), code
 
                 # attempt to get value from PUT request
@@ -671,8 +670,9 @@ class ShardNodeWrapper(object):
                     url = os.path.join('http://', node_address, 'proxy/replicate', key)
 
                     try:
-                        # TODO *create new json containing new causal context + data*
-                        resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
+                        json_object = request.get_json()
+                        json_object['causal-context'] = self.causal_context
+                        resp = requests.put(url, json=json_object, timeout=myconstants.TIMEOUT)
 
                     except (requests.Timeout, requests.exceptions.ConnectionError):
                         print('Error: we were not able to communicate with another replica')
@@ -681,7 +681,6 @@ class ShardNodeWrapper(object):
                 response['message'] = message
                 response['causal-context'] = self.causal_context
 
-                self.job.resume()
                 return jsonify(response), code
 
             else:
@@ -693,13 +692,11 @@ class ShardNodeWrapper(object):
                     try:
                         resp = requests.put(url, json=contents, timeout=myconstants.TIMEOUT)
 
-                        self.job.resume()
                         return resp.text, resp.status_code
                     except (requests.Timeout, requests.exceptions.ConnectionError):
                         continue
 
                 ###### TODO check if need to handle 503 here or not?
-                self.job.resume()
                 return resp.text, resp.status_code
         """
             DELETE requests handling
@@ -779,7 +776,6 @@ class ShardNodeWrapper(object):
 
 
                 ###### TODO check if need to handle 503 here or not?
-                self.job.resume()
                 return resp.text, resp.status_code
 
 
@@ -788,10 +784,9 @@ class ShardNodeWrapper(object):
         Method similar to keys, but instead it does not ask other nodes about a key.
         proxy_keys just returns whether it finds its key in it's local storage or not
         """
-        self.job.pause()
         response = {}
         contents = request.get_json()
-        # context = contents['causal-context']
+        context = contents['causal-context']
         code = 999
 
         """
@@ -813,7 +808,6 @@ class ShardNodeWrapper(object):
                 response['causal-context'] = self.causal_context
                 code = 404
 
-            self.job.resume()
             return jsonify(response), code
 
         """
@@ -829,7 +823,6 @@ class ShardNodeWrapper(object):
                 response['causal-context'] = self.causal_context
                 response['address'] = self.address
                 code = 400
-                self.job.resume()
                 return jsonify(response), code
 
             if key in self.kv_store:
@@ -850,7 +843,6 @@ class ShardNodeWrapper(object):
                 response['causal-context'] = self.causal_context
                 response['address'] = self.address
                 code = 400
-                self.job.resume()
                 return jsonify(response), code
 
 
@@ -863,6 +855,8 @@ class ShardNodeWrapper(object):
                 Updating the causal-context object for the current node with the updated value
             """
             self.handle_causal_context(key, value)
+
+            self.combine_causal_contexts(self.causal_context, context)
 
             """
                 Replicate
@@ -877,7 +871,9 @@ class ShardNodeWrapper(object):
                 url = os.path.join('http://', node_address, 'proxy/replicate', key)
 
                 try:
-                    resp = requests.put(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
+                    json_obj = request.get_json()
+                    json_obj['causal-context'] = self.causal_context
+                    resp = requests.put(url, json=json_obj, timeout=myconstants.TIMEOUT)
 
                 except (requests.Timeout, requests.exceptions.ConnectionError):
                     print('Error: we were not able to communicate with another replica')
@@ -888,7 +884,6 @@ class ShardNodeWrapper(object):
             response['causal-context'] = self.causal_context
             response['address'] = self.address
 
-            self.job.resume()
             return jsonify(response), code
         """
             DELETE requests handling forward from another shard node
@@ -936,7 +931,6 @@ class ShardNodeWrapper(object):
                 code = 404
 
 
-            self.job.resume()
             return jsonify(response), code
 
 
@@ -946,11 +940,10 @@ class ShardNodeWrapper(object):
         Function used to handle other nodes receiving a replicated value from
         another node in the same replica
         """
-        self.job.pause()
         response = {}
         code = 999
         contents = request.get_json()
-        # context = contents['causal-context']
+        context = contents['causal-context']
         value = contents['value']
 
         """
@@ -967,7 +960,7 @@ class ShardNodeWrapper(object):
                 message = myconstants.ADDED_MESSAGE
                 code = 201
 
-            self.causal_context = contents['causal-context']
+            self.causal_context = context
 
             response['replaced'] = replaced
             response['message'] = message
@@ -988,7 +981,6 @@ class ShardNodeWrapper(object):
             response['causal-context'] = self.causal_context
             response['address'] = self.address
 
-        self.job.resume()
         return jsonify(response), code
 
     def handle_causal_context(self, key, value):

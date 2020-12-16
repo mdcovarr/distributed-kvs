@@ -29,4 +29,6 @@ LONG_KEY_RESPONSE = {
     "message": "Error in PUT"
 }
 
+UNABLE_TO_SERVICE_MESSAGE = 'Unable to satisfy request'
+
 TIMEOUT = 3
