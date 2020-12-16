@@ -4,15 +4,27 @@
 
 from flask import Flask, request, jsonify
 from uhashring import HashRing
-from apscheduler.schedulers.background import BackgroundScheduler
 import json
 import requests
 import myconstants
 import os
 import sys
 import time
+import threading
+from subprocess import check_call
 
-
+def gossip_task():
+    """
+    Trigger handle gossip every few seconds
+    """
+    url = os.path.join('http://', '127.0.0.1:13800', 'proxy/handle-gossip')
+    command = 'curl --request GET {0}'.format(url)
+    while True:
+        time.sleep(3)
+        try:
+            check_call(command, shell=True)
+        except:
+            print('Error: triggering gossip')
 
 class ShardNodeWrapper(object):
     """
@@ -28,12 +40,10 @@ class ShardNodeWrapper(object):
         self.address = ''
         self.repl_factor = repl_factor
         self.causal_context = {}
-        self.scheduler = BackgroundScheduler()
-        self.scheduler.add_job(self.trigger_gossip, 'interval', seconds=3, id='gossip-job')
         self.currentHashRing = None
 
-    def trigger_gossip(self):
-        self.handle_gossip()
+    def setup_gossip(self):
+        threading.Thread(target=gossip_task).start()
 
     def setup_routes(self):
         """
@@ -229,8 +239,6 @@ class ShardNodeWrapper(object):
         in the distributed key-value store
         :return status: the status of the HTTP PUT request
         """
-        self.scheduler.pause_job('gossip-job')
-        self.scheduler.remove_job('gossip-job')
         self.causal_context = {}
         response = {}
 
@@ -380,7 +388,6 @@ class ShardNodeWrapper(object):
             7. Reset causal context
         """
         self.causal_context = {}
-        self.scheduler.add_job(self.trigger_gossip, 'interval', seconds=3, id='gossip-job')
 
         return jsonify(response), code
 
@@ -391,8 +398,6 @@ class ShardNodeWrapper(object):
         receives a proxy view change, it means that another node was the
         node who received the initial /view-change from the client
         """
-        self.scheduler.pause_job('gossip-job')
-        self.scheduler.remove_job('gossip-job')
         self.causal_context = {}
         response = {}
         code = 200
@@ -486,7 +491,6 @@ class ShardNodeWrapper(object):
             5. Reset causal context
         """
         self.causal_context = {}
-        self.scheduler.add_job(self.trigger_gossip, 'interval', seconds=3, id='gossip-job')
 
         return jsonify(response), code
 
@@ -1005,9 +1009,12 @@ class ShardNodeWrapper(object):
         Function used to get the causal context of other replica nodes in
         same shard
         """
+        response = {}
+        code = 200
+
         # need to check if node is 1st node on list of replicas
         if self.address != self.replicas[0]:
-            return
+            return jsonify(response), 200
 
         """
             1. At this point the current node we are on is 1st in replicas list,
@@ -1031,7 +1038,7 @@ class ShardNodeWrapper(object):
                     We were not able to contact one of our replicas thus
                     we should just stop process of gossiping
                 """
-                return
+                return jsonify(response), 200
 
             # Need to extract node's causal context
             resp_dict = json.loads(resp.text)
@@ -1070,7 +1077,7 @@ class ShardNodeWrapper(object):
                 resp = requests.put(url, json=all_context, timeout=2)
             except (requests.Timeout, requests.exceptions.ConnectionError):
                 print('Error: Was not able to reach node when updating causal context')
-                return
+                return jsonify(response), code
 
         """
             4. Current Node needs to update it's kv-store and context, based off all_context
@@ -1081,7 +1088,7 @@ class ShardNodeWrapper(object):
             curr_obj = self.causal_context[key]
             self.kv_store[key] = curr_obj['value']
 
-        return
+        return jsonify(response), code
 
     def node_causal_context(self):
         """
