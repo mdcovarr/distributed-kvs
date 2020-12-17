@@ -20,7 +20,7 @@ def gossip_task():
     url = os.path.join('http://', '127.0.0.1:13800', 'proxy/handle-gossip')
     command = 'curl --request GET {0}'.format(url)
     while True:
-        time.sleep(3)
+        time.sleep(2)
         try:
             check_call(command, shell=True)
         except:
