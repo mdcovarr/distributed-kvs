@@ -1014,56 +1014,11 @@ class ShardNodeWrapper(object):
         response = {}
         code = 200
 
-        # need to check if node is 1st node on list of replicas
-        if self.address != self.replicas[0]:
-            return jsonify(response), 200
-
         """
             1. At this point the current node we are on is 1st in replicas list,
                and thus should trigger gossip
         """
         all_context = self.causal_context
-
-
-        for node_address in self.replicas:
-            # We don't need to contact ourselves
-            if self.address == node_address:
-                continue
-
-            url = os.path.join('http://', node_address, 'proxy/node-causal-context')
-
-            try:
-                resp = requests.get(url, timeout=2)
-
-            except (requests.Timeout, requests.exceptions.ConnectionError):
-                """
-                    We were not able to contact one of our replicas thus
-                    we should just stop process of gossiping
-                """
-                return jsonify(response), 200
-
-            # Need to extract node's causal context
-            resp_dict = json.loads(resp.text)
-            node_context = resp_dict['causal-context']
-
-            """
-                2. Combine current causal context, with incoming causal context of node
-            """
-            new_context = {**all_context, **node_context}
-
-            for key, value in new_context.items():
-                # Check if key exists in both nodes
-                if key in all_context and key in node_context:
-                    # Check timestamp if both nodes have a certain key value
-                    if float(node_context[key]['timestamp']) > float(all_context[key]['timestamp']):
-                        new_context[key] = node_context[key]
-                    else:
-                        new_context[key] = all_context[key]
-
-                        #  TODO Handle delete
-
-            all_context = new_context
-
 
         """
             3. At this point we have determined the causal context for all the replicas.
@@ -1080,15 +1035,6 @@ class ShardNodeWrapper(object):
             except (requests.Timeout, requests.exceptions.ConnectionError):
                 print('Error: Was not able to reach node when updating causal context')
                 return jsonify(response), code
-
-        """
-            4. Current Node needs to update it's kv-store and context, based off all_context
-        """
-        self.causal_context = all_context
-
-        for key in self.causal_context:
-            curr_obj = self.causal_context[key]
-            self.kv_store[key] = curr_obj['value']
 
         return jsonify(response), code
 
@@ -1111,11 +1057,7 @@ class ShardNodeWrapper(object):
             except:
                 print('Error: Invalid json')
 
-            self.causal_context = contents
-
-            for key in self.causal_context:
-                curr_obj = self.causal_context[key]
-                self.kv_store[key] = curr_obj['value']
+            self.combine_causal_contexts(self.causal_context, contents)
 
             return jsonify(response), code
 
