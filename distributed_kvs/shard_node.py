@@ -799,6 +799,9 @@ class ShardNodeWrapper(object):
             GET requests handling forward from another shard node
         """
         if request.method == 'GET':
+
+            self.combine_causal_contexts(context, self.causal_context)
+
             if key in self.kv_store:
                 response['doesExist'] = True
                 response['message'] = myconstants.RETRIEVED_MESSAGE
@@ -821,7 +824,6 @@ class ShardNodeWrapper(object):
         """
         if request.method == 'PUT':
             contents = request.get_json()
-            # context = contents['causal-context']
 
             if len(key) > myconstants.KEY_LENGTH:
                 response['message'] = 'Error in PUT'
