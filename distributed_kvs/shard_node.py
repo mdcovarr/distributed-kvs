@@ -330,7 +330,6 @@ class ShardNodeWrapper(object):
             if self.shard_id == key:
                 new_kv_store = new_dict[key].copy()
 
-        #new_dict.pop(self.shard_id, None)
         self.kv_store = new_kv_store
 
         """
@@ -466,7 +465,6 @@ class ShardNodeWrapper(object):
             if self.shard_id == key:
                 new_kv_store = new_dict[key].copy()
 
-        #new_dict.pop(self.shard_id, None)
         self.kv_store = new_kv_store
 
         """
@@ -712,30 +710,35 @@ class ShardNodeWrapper(object):
             correct_shard_id = self.currentHashRing.get_node(key)
 
             if correct_shard_id == self.shard_id:
-            # if key in self.kv_store:
                 # Need to delete key value from store
-                del self.kv_store[key]
+                if key not in self.kv_store:
+                    response['doesExist'] = False
+                    response['error'] = myconstants.KEY_ERROR
+                    response['message'] = myconstants.DELETE_ERROR_MESSAGE
+                    response['causal-context'] = self.causal_context
+                    code = 404
+                    return jsonify(response), code
+
+                self.kv_store.pop(key, None)
 
                 """
                     Updating the causal-context object for the current node with the updated value
                 """
                 try:
                     key_causal_context = self.causal_context[key]
-                    key_causal_context['timestamp'] = time.time()
-                    key_causal_context['value'] = None
+                    key_causal_context['timestamp'] = str(time.time())
+                    key_causal_context['value'] = ""
                     key_causal_context['doesExist'] = False
                 except KeyError:
                     """
                         If key does not exist in the causal-context object
                     """
                     key_causal_context = {}
-                    key_causal_context['timestamp'] = time.time()
-                    key_causal_context['value'] = None
+                    key_causal_context['timestamp'] = str(time.time())
+                    key_causal_context['value'] = ""
                     key_causal_context['doesExist'] = False
 
                 self.causal_context[key] = key_causal_context
-
-
 
                 """
                     Replicate
@@ -750,8 +753,9 @@ class ShardNodeWrapper(object):
                     url = os.path.join('http://', node_address, 'proxy/replicate', key)
 
                     try:
-                        # TODO *create new json containing new causal context + data*
-                        resp = requests.delete(url, json=request.get_json(), timeout=myconstants.TIMEOUT)
+                        json_obj = request.get_json()
+                        json_obj['causal-context'] = self.causal_context
+                        resp = requests.delete(url, json=json_obj, timeout=myconstants.TIMEOUT)
 
                     except (requests.Timeout, requests.exceptions.ConnectionError):
                         print('Error: we were not able to communicate with another replica')
@@ -759,19 +763,17 @@ class ShardNodeWrapper(object):
 
 
                 response['causal-context'] = self.causal_context
-                response['doesExist'] = False
+                response['doesExist'] = True
                 response['message'] = myconstants.DELETE_SUCCESS_MESSAGE
 
                 code = 200
+                return jsonify(response), code
 
             else:
                 proxy_path = 'proxy/kvs/keys'
 
-                # for shard_id in self.all_partitions:
-                #     if shard_id == self.shard_id:
-                #         continue
-
                 for node_address in self.all_partitions[correct_shard_id]:
+
                     url = os.path.join('http://', node_address, proxy_path, key)
 
                     try:
@@ -899,7 +901,7 @@ class ShardNodeWrapper(object):
         if request.method == 'DELETE':
             if key in self.kv_store:
                 # Need to delete key value from store
-                del self.kv_store[key]
+                self.kv_store.pop(key, None)
 
 
                 """
@@ -907,29 +909,50 @@ class ShardNodeWrapper(object):
                 """
                 try:
                     key_causal_context = self.causal_context[key]
-                    key_causal_context['timestamp'] = time.time()
-                    key_causal_context['value'] = None
+                    key_causal_context['timestamp'] = str(time.time())
+                    key_causal_context['value'] = ""
                     key_causal_context['doesExist'] = False
                 except KeyError:
                     """
                         If key does not exist in the causal-context object
                     """
                     key_causal_context = {}
-                    key_causal_context['timestamp'] = time.time()
-                    key_causal_context['value'] = None
+                    key_causal_context['timestamp'] = str(time.time())
+                    key_causal_context['value'] = ""
                     key_causal_context['doesExist'] = False
 
 
                 self.causal_context[key] = key_causal_context
 
-                response['doesExist'] = False
+                self.combine_causal_contexts(self.causal_context, context)
+
+                """
+                    Replicate
+
+                    Need to tell all other nodes in same replica about the
+                    newly inserted/update value
+                """
+                for node_address in self.all_partitions[self.shard_id]:
+                    if node_address == self.address:
+                        continue
+
+                    url = os.path.join('http://', node_address, 'proxy/replicate', key)
+
+                    try:
+                        json_obj = request.get_json()
+                        json_obj['causal-context'] = self.causal_context
+                        resp = requests.delete(url, json=json_obj, timeout=myconstants.TIMEOUT)
+
+                    except (requests.Timeout, requests.exceptions.ConnectionError):
+                        print('Error: we were not able to communicate with another replica')
+
+
+                response['doesExist'] = True
                 response['message'] = myconstants.DELETE_SUCCESS_MESSAGE
                 response['address'] = self.address
                 response['causal-context'] = self.causal_context
 
                 code = 200
-
-
             else:
                 response['doesExist'] = False
                 response['error'] = myconstants.KEY_ERROR
@@ -937,7 +960,6 @@ class ShardNodeWrapper(object):
                 response['causal-context'] = self.causal_context
 
                 code = 404
-
 
             return jsonify(response), code
 
@@ -980,9 +1002,12 @@ class ShardNodeWrapper(object):
             DELETE requests handling forward from another shard node
         """
         if request.method == 'DELETE':
-            del self.kv_store[key]
+            try:
+                self.kv_store.pop(key, None)
+            except:
+                print('Exception: trying to delete a key via replication')
 
-            self.causal_context = contents['causal-context']
+            self.causal_context = context
 
             response['doesExist'] = False
             response['message'] = myconstants.DELETE_SUCCESS_MESSAGE
@@ -1076,12 +1101,18 @@ class ShardNodeWrapper(object):
                     new_context[key] = clients_context[key]
                 else:
                     new_context[key] = curr_context[key]
-                    #  TODO Handle delete
 
         # Should update key_value store to reflect new_context
         for key in new_context:
             curr_obj = new_context[key]
-            self.kv_store[key] = curr_obj['value']
+
+            if curr_obj['doesExist'] == True:
+                self.kv_store[key] = curr_obj['value']
+            else:
+                try:
+                    self.kv_store.pop(key, None)
+                except:
+                    print('Exception attemting to delete key in causal context')
 
         # update causal context
         self.causal_context = new_context
